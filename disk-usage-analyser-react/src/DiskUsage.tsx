@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Pie } from 'react-chartjs-2';
 import { Table, Input, Select, Button, Modal, Space, message, AutoComplete, Popover, Typography } from 'antd';
-import { DeleteOutlined, ReloadOutlined, FolderOpenOutlined, FileOutlined, CopyOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { DeleteOutlined, ReloadOutlined, FolderOpenOutlined, FileOutlined, CopyOutlined, QuestionCircleOutlined, StopOutlined } from '@ant-design/icons';
 import { DiskUsageAPI } from './api/disk_usage';
 import type { FileInfo } from './api/disk_usage';
 
@@ -131,7 +132,10 @@ function getFileHelp(record: FileNode) {
 }
 
 export default function DiskUsage() {
-    const [rootPath, setRootPath] = useState<string>('');
+    const [searchParams, setSearchParams] = useSearchParams();
+    const currentUrlPath = searchParams.get('path');
+
+    const [rootPath, setRootPath] = useState<string>(currentUrlPath || '');
     const [rootItems, setRootItems] = useState<FileNode[]>([]);
     const [loading, setLoading] = useState(false);
     const [view, setView] = useState<'list' | 'pie'>('list');
@@ -140,7 +144,12 @@ export default function DiskUsage() {
     const [minSizeBytes, setMinSizeBytes] = useState(1024 * 1024);
 
     useEffect(() => {
-        fetchUsage('', true);
+        const targetPath = currentUrlPath || '';
+        setRootPath(targetPath);
+        fetchUsage(targetPath, true);
+    }, [currentUrlPath]);
+
+    useEffect(() => {
         return () => {
             activeSources.current.forEach(es => es.close());
             activeSources.current.clear();
@@ -160,6 +169,10 @@ export default function DiskUsage() {
         let effectivePath = dirPath;
 
         if (isRoot) {
+            // Clear all active sources when switching root to avoid ghost updates
+            activeSources.current.forEach(es => es.close());
+            activeSources.current.clear();
+            
             setLoading(true);
             setRootItems([]);
         }
@@ -257,6 +270,25 @@ export default function DiskUsage() {
         });
     };
 
+    const handleStop = () => {
+        activeSources.current.forEach(es => es.close());
+        activeSources.current.clear();
+        setLoading(false);
+        message.info('Analysis stopped');
+    };
+
+    const onSearch = () => {
+        setSearchParams(prev => {
+            const newParams = new URLSearchParams(prev);
+            if (rootPath) {
+                newParams.set('path', rootPath);
+            } else {
+                newParams.delete('path');
+            }
+            return newParams;
+        });
+    };
+
     const columns = [
         {
             title: 'Name',
@@ -343,12 +375,17 @@ export default function DiskUsage() {
                     <Input
                         value={rootPath}
                         onChange={e => setRootPath(e.target.value)}
-                        onPressEnter={() => fetchUsage(rootPath, true)}
+                        onPressEnter={onSearch}
                         placeholder="Enter path..."
                         style={{ width: 'calc(100% - 100px)' }}
                     />
-                    <Button type="primary" onClick={() => fetchUsage(rootPath, true)} loading={loading} icon={<ReloadOutlined />}>
-                        Go
+                    <Button 
+                        type="primary" 
+                        danger={loading}
+                        onClick={loading ? handleStop : onSearch} 
+                        icon={loading ? <StopOutlined /> : <ReloadOutlined />}
+                    >
+                        {loading ? 'Stop' : 'Go'}
                     </Button>
                 </Space.Compact>
                 <Space>
