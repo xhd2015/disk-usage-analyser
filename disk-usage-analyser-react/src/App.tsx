@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { useState } from 'react';
-import AppGen from './AppGen';
 import DiskUsage from './DiskUsage';
+import DiskManager from './DiskManager';
 import './App.css';
 
 function Home() {
@@ -19,13 +19,18 @@ function Home() {
                 </button>
             </div>
             <div style={{ marginTop: '20px' }}>
-                <Link to="/about" style={{ fontSize: '18px', color: '#646cff', textDecoration: 'none' }}>
-                    Go to About Page
+                <Link to="/usage" style={{ fontSize: '18px', color: '#646cff', textDecoration: 'none' }}>
+                    Go to Disk Usage
                 </Link>
             </div>
             <div style={{ marginTop: '20px' }}>
-                <Link to="/usage" style={{ fontSize: '18px', color: '#646cff', textDecoration: 'none' }}>
-                    Go to Disk Usage
+                <Link to="/disks" style={{ fontSize: '18px', color: '#646cff', textDecoration: 'none' }}>
+                    Go to Disk Manager
+                </Link>
+            </div>
+            <div style={{ marginTop: '20px' }}>
+                <Link to="/about" style={{ fontSize: '18px', color: '#646cff', textDecoration: 'none' }}>
+                    Go to About Page
                 </Link>
             </div>
         </div>
@@ -49,16 +54,16 @@ function App() {
         <Router>
             <nav style={{ padding: '10px 20px', borderBottom: '1px solid #eee', display: 'flex', gap: '20px' }}>
                 <Link to="/">Home</Link>
-                <Link to="/about">About</Link>
                 <Link to="/usage">Disk Usage</Link>
-                <Link to="/gen">Generated App</Link>
+                <Link to="/disks">Disk Manager</Link>
+                <Link to="/about">About</Link>
             </nav>
 
             <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/about" element={<About />} />
                 <Route path="/usage" element={<DiskUsage />} />
-                <Route path="/gen" element={<AppGen />} />
+                <Route path="/disks" element={<DiskManager />} />
             </Routes>
         </Router>
     );
