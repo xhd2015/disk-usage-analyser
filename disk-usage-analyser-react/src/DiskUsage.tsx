@@ -172,7 +172,7 @@ export default function DiskUsage() {
             // Clear all active sources when switching root to avoid ghost updates
             activeSources.current.forEach(es => es.close());
             activeSources.current.clear();
-            
+
             setLoading(true);
             setRootItems([]);
         }
@@ -379,10 +379,10 @@ export default function DiskUsage() {
                         placeholder="Enter path..."
                         style={{ width: 'calc(100% - 100px)' }}
                     />
-                    <Button 
-                        type="primary" 
+                    <Button
+                        type="primary"
                         danger={loading}
-                        onClick={loading ? handleStop : onSearch} 
+                        onClick={loading ? handleStop : onSearch}
                         icon={loading ? <StopOutlined /> : <ReloadOutlined />}
                     >
                         {loading ? 'Stop' : 'Go'}

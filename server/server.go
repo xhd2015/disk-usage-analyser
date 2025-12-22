@@ -81,10 +81,10 @@ func EnsureFrontendDevServer(ctx context.Context) (chan struct{}, error) {
 func Serve(port int, dev bool) error {
 	mux := http.NewServeMux()
 	server := &http.Server{
-		Addr:         fmt.Sprintf(":%d", port),
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		Handler:      mux,
+		Addr:        fmt.Sprintf(":%d", port),
+		ReadTimeout: 30 * time.Second,
+		// WriteTimeout: 30 * time.Second, // Disable write timeout for SSE
+		Handler: mux,
 	}
 
 	if dev {

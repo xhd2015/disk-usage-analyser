@@ -1,14 +1,17 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +27,14 @@ type FileInfo struct {
 }
 
 func handleUsage(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic in handleUsage: %v\nStack: %s", r, debug.Stack())
+			// Try to send error event if possible
+			fmt.Fprintf(w, "event: server_error\ndata: {\"error\": \"Internal Server Error: %v\"}\n\n", r)
+		}
+	}()
+
 	// CORS for dev
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	if r.Method == "OPTIONS" {
@@ -38,6 +49,7 @@ func handleUsage(w http.ResponseWriter, r *http.Request) {
 			var err error
 			dirPath, err = os.Getwd()
 			if err != nil {
+				log.Printf("Error getting current working directory: %v", err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -48,11 +60,14 @@ func handleUsage(w http.ResponseWriter, r *http.Request) {
 	if !filepath.IsAbs(dirPath) {
 		absPath, err := filepath.Abs(dirPath)
 		if err != nil {
+			log.Printf("Error resolving absolute path for %s: %v", dirPath, err)
 			http.Error(w, "Invalid path: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 		dirPath = absPath
 	}
+
+	log.Printf("Starting usage scan for path: %s", dirPath)
 
 	// Set SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -71,6 +86,7 @@ func handleUsage(w http.ResponseWriter, r *http.Request) {
 
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
+		log.Printf("Error reading directory %s: %v", dirPath, err)
 		sendEvent(w, "server_error", map[string]string{"error": err.Error()})
 		return
 	}
@@ -117,30 +133,51 @@ func handleUsage(w http.ResponseWriter, r *http.Request) {
 	// Limit concurrency
 	sem := make(chan struct{}, 20)
 
+	// Create cancellable context
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+
 	// Start workers for directories
 	for _, dir := range subDirs {
 		wg.Add(1)
 		go func(d fs.DirEntry) {
 			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("Panic in worker for %s: %v", d.Name(), r)
+				}
+			}()
+
 			// Acquire semaphore
-			sem <- struct{}{}
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
 			defer func() { <-sem }()
 
 			onProgress := func(currentSize int64) {
-				resultChan <- FileInfo{
+				select {
+				case resultChan <- FileInfo{
 					Name:   d.Name(),
 					Size:   currentSize,
 					IsDir:  true,
 					Status: "pending",
+				}:
+				case <-ctx.Done():
 				}
 			}
 
-			size := getDirSizeWithProgress(filepath.Join(dirPath, d.Name()), onProgress)
-			resultChan <- FileInfo{
+			size := getDirSizeWithProgress(ctx, filepath.Join(dirPath, d.Name()), onProgress)
+
+			select {
+			case resultChan <- FileInfo{
 				Name:   d.Name(),
 				Size:   size,
 				IsDir:  true,
 				Status: "done",
+			}:
+			case <-ctx.Done():
 			}
 		}(dir)
 	}
@@ -153,7 +190,10 @@ func handleUsage(w http.ResponseWriter, r *http.Request) {
 
 	// Stream results as they arrive
 	for item := range resultChan {
-		sendEvent(w, "item", item)
+		if err := sendEvent(w, "item", item); err != nil {
+			log.Printf("Client disconnected, stopping scan")
+			return
+		}
 		flusher.Flush()
 	}
 
@@ -200,18 +240,32 @@ func handleMoveToTrash(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func sendEvent(w http.ResponseWriter, event string, data interface{}) {
+func sendEvent(w http.ResponseWriter, event string, data interface{}) error {
 	jsonData, _ := json.Marshal(data)
-	fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, jsonData)
+	_, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, jsonData)
+	if err != nil {
+		log.Printf("Error sending event %s: %v", event, err)
+		return err
+	}
+	return nil
 }
 
-func getDirSizeWithProgress(path string, onProgress func(int64)) int64 {
+func getDirSizeWithProgress(ctx context.Context, path string, onProgress func(int64)) int64 {
 	var size int64
 	var count int
 	lastUpdate := time.Now()
 
-	filepath.WalkDir(path, func(_ string, d fs.DirEntry, err error) error {
+	filepath.WalkDir(path, func(p string, d fs.DirEntry, err error) error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
 		if err != nil {
+			// Don't log every permission denied, might be too noisy, but for now user requested logs
+			// Filter out common harmless errors if needed, but "incomplete chunked encoding" suggests something worse
+			log.Printf("Error walking %s: %v", p, err)
 			return nil
 		}
 		if !d.IsDir() {

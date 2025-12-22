@@ -28,10 +28,10 @@ func ServeComponent(port int, opts ServeOptions) error {
 
 	mux := http.NewServeMux()
 	server := &http.Server{
-		Addr:         fmt.Sprintf(":%d", port),
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		Handler:      mux,
+		Addr:        fmt.Sprintf(":%d", port),
+		ReadTimeout: 30 * time.Second,
+		// WriteTimeout: 30 * time.Second, // Disable write timeout for SSE
+		Handler: mux,
 	}
 
 	if opts.Dev {
