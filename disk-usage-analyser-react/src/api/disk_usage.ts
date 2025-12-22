@@ -64,4 +64,14 @@ export class DiskUsageAPI {
             throw new Error(text);
         }
     }
+
+    static async refresh(path: string): Promise<void> {
+        const res = await fetch(`/api/refresh?path=${encodeURIComponent(path)}`, {
+            method: 'POST'
+        });
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(text);
+        }
+    }
 }

@@ -161,7 +161,7 @@ export default function DiskUsage() {
         setMinSizeBytes(bytes);
     }, [filterSizeStr]);
 
-    const fetchUsage = (dirPath: string, isRoot: boolean = false) => {
+    const fetchUsage = (dirPath: string, isRoot: boolean = false, clearData: boolean = true) => {
         if (activeSources.current.has(dirPath)) {
             activeSources.current.get(dirPath)?.close();
         }
@@ -170,11 +170,21 @@ export default function DiskUsage() {
 
         if (isRoot) {
             // Clear all active sources when switching root to avoid ghost updates
-            activeSources.current.forEach(es => es.close());
-            activeSources.current.clear();
+            // But if we are just refreshing the root (clearData=false), we might want to keep others?
+            // Actually, if we refresh root, the whole tree is potentially invalid. 
+            // But user wants to keep UI state.
+            // If we don't close child sources, they might try to update nodes that we are replacing?
+            // But we are merging updates.
 
-            setLoading(true);
-            setRootItems([]);
+            if (clearData) {
+                activeSources.current.forEach(es => es.close());
+                activeSources.current.clear();
+                setLoading(true);
+                setRootItems([]);
+            } else {
+                // Even if not clearing data, we should probably close the existing root source 
+                // (which we did above with activeSources.get(dirPath)?.close())
+            }
         }
 
         const es = DiskUsageAPI.streamUsage(dirPath, {
@@ -270,6 +280,74 @@ export default function DiskUsage() {
         });
     };
 
+    const handleRefresh = async (record: FileNode) => {
+        try {
+            await DiskUsageAPI.refresh(record.path);
+            message.success('Refreshed cache for ' + record.name);
+
+            // Determine parent path to refresh the list containing this record
+            const isRootRecord = record.path === rootPath;
+
+            if (isRootRecord) {
+                fetchUsage(rootPath, true, false); // isRoot=true, clear=false
+            } else {
+                // Simple parent extraction. Handles both / and \ separators.
+                // We can use the record.path structure.
+                // If path is "/a/b", parent is "/a".
+                // If path is "/", parent is null (handled above).
+                // Use joinPath logic in reverse or regex.
+
+                // regex: match everything up to the last separator
+                // But separators can be mixed? Assumed normalized from backend.
+                // Backend sends consistent paths usually.
+
+                // If we are on windows, path might be C:\...
+                // Let's use lastIndexOf.
+
+                let parentPath = '';
+                const lastSlash = record.path.lastIndexOf('/');
+                const lastBackslash = record.path.lastIndexOf('\\');
+                const lastSep = Math.max(lastSlash, lastBackslash);
+
+                if (lastSep <= 0) {
+                    // e.g. "/usr" -> lastSep=0. Parent is "/"
+                    // "C:" -> no sep?
+                    parentPath = record.path.substring(0, lastSep + 1);
+                    if (parentPath === '' && record.path.startsWith('/')) parentPath = '/';
+                } else {
+                    parentPath = record.path.substring(0, lastSep);
+                }
+
+                // If parent is root, we treat it as root update?
+                if (parentPath === rootPath || (rootPath.endsWith('/') && parentPath + '/' === rootPath) || (parentPath === '' && rootPath === '/')) {
+                    // Actually simpler: if parent IS the current rootPath
+                    // Normalized check
+                    const normRoot = rootPath.endsWith('/') && rootPath.length > 1 ? rootPath.slice(0, -1) : rootPath;
+                    const normParent = parentPath.endsWith('/') && parentPath.length > 1 ? parentPath.slice(0, -1) : parentPath;
+
+                    if (normParent === normRoot) {
+                        fetchUsage(rootPath, true, false);
+                    } else {
+                        fetchUsage(parentPath, false, false);
+                    }
+                } else {
+                    // Fallback: just fetch parent as non-root
+                    fetchUsage(parentPath, false, false);
+                }
+            }
+
+            // Also, if the record itself has children expanded (or we want to update its own content view),
+            // we should re-fetch the record itself?
+            // If we don't, and we expanded it, the children are stale.
+            // But we don't know if it is expanded here easily without checking table state or finding node.
+            // But `fetchUsage` is cheap if we just want to start the stream.
+            // Let's just update the parent list for now to update the size.
+
+        } catch (e) {
+            message.error('Failed to refresh: ' + e);
+        }
+    };
+
     const handleStop = () => {
         activeSources.current.forEach(es => es.close());
         activeSources.current.clear();
@@ -277,16 +355,35 @@ export default function DiskUsage() {
         message.info('Analysis stopped');
     };
 
-    const onSearch = () => {
-        setSearchParams(prev => {
-            const newParams = new URLSearchParams(prev);
-            if (rootPath) {
-                newParams.set('path', rootPath);
-            } else {
-                newParams.delete('path');
+    const onSearch = async () => {
+        // If path changed, set it (triggers useEffect).
+        // If path NOT changed, force refresh.
+        if (rootPath === currentUrlPath) {
+            try {
+                await DiskUsageAPI.refresh(rootPath);
+                fetchUsage(rootPath, true, true);
+            } catch (e) {
+                message.error('Failed to refresh: ' + e);
             }
-            return newParams;
-        });
+        } else {
+            // Path changed. Trigger refresh of new path, then set param.
+            // Wait, if we just set param, it loads from cache (if exists).
+            // User wants: "If directory changed -> switch to new dir, AND reset cache".
+            try {
+                await DiskUsageAPI.refresh(rootPath);
+            } catch (e) {
+                // Ignore error (maybe path doesn't exist in cache yet)
+            }
+            setSearchParams(prev => {
+                const newParams = new URLSearchParams(prev);
+                if (rootPath) {
+                    newParams.set('path', rootPath);
+                } else {
+                    newParams.delete('path');
+                }
+                return newParams;
+            });
+        }
     };
 
     const columns = [
@@ -319,6 +416,12 @@ export default function DiskUsage() {
                 const helpContent = getFileHelp(record);
                 return (
                     <Space>
+                        <Button
+                            type="text"
+                            icon={<ReloadOutlined />}
+                            onClick={(e) => { e.stopPropagation(); handleRefresh(record); }}
+                            title="Refresh Cache"
+                        />
                         {helpContent && (
                             <Popover content={helpContent} title="Help" trigger="click" placement="left">
                                 <Button

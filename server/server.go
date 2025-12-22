@@ -223,6 +223,7 @@ func RegisterAPI(mux *http.ServeMux) error {
 	// ping
 	mux.HandleFunc("/ping", handlePing)
 	mux.HandleFunc("/api/usage", handleUsage)
+	mux.HandleFunc("/api/refresh", handleRefresh)
 	mux.HandleFunc("/api/moveToTrash", handleMoveToTrash)
 	mux.HandleFunc("/api/disks/list", handleListDisks)
 	mux.HandleFunc("/api/disks/mount", handleMountDisk)
