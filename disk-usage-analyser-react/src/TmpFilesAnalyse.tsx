@@ -43,8 +43,8 @@ function TmpFilesAnalyse() {
     const [locations, setLocations] = useState<TmpLocation[]>(defaultLocations);
     const [locStatuses, setLocStatuses] = useState<Record<string, LocStatus>>({});
     const eventSourceRef = useRef<EventSource | null>(null);
-    const totalSize = locations.reduce((sum, loc) => sum + loc.size, 0);
-    const reclaimableSize = locations.filter(loc => loc.rebootSafe).reduce((sum, loc) => sum + loc.size, 0);
+    const [totalSize, setTotalSize] = useState(0);
+    const [reclaimableSize, setReclaimableSize] = useState(0);
 
     const startScan = () => {
         setScanning(true);
@@ -63,6 +63,8 @@ function TmpFilesAnalyse() {
                     : loc
             ));
             setLocStatuses(prev => ({ ...prev, [p.label]: 'scanning' }));
+            setTotalSize(p.totalSize);
+            setReclaimableSize(p.reclaimableSize);
         });
 
         es.addEventListener('location', (e) => {

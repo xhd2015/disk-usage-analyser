@@ -93,6 +93,21 @@ func BuildSummary(locations []TmpLocation) TmpSummary {
 	}
 }
 
+func BuildProgressPayload(label string, curSize, curCount int64, accumulatedSize, accumulatedReclaimable int64, rebootSafe bool) map[string]interface{} {
+	totalSize := accumulatedSize + curSize
+	reclaimableSize := accumulatedReclaimable
+	if rebootSafe {
+		reclaimableSize += curSize
+	}
+	return map[string]interface{}{
+		"label":           label,
+		"size":            curSize,
+		"fileCount":       curCount,
+		"totalSize":       totalSize,
+		"reclaimableSize": reclaimableSize,
+	}
+}
+
 func HandleTmpAnalyse(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -113,16 +128,15 @@ func HandleTmpAnalyse(w http.ResponseWriter, r *http.Request) {
 
 	locations := DiscoverLocations(homeDir)
 
+	var accumulatedSize, accumulatedReclaimable int64
+
 	for i := range locations {
 		fsys := os.DirFS(locations[i].Path)
 		label := locations[i].Label
+		rebootSafe := locations[i].RebootSafe
 
 		size, count, err := ScanWithProgress(fsys, ".", func(curSize int64, curCount int64) {
-			progress := map[string]interface{}{
-				"label":     label,
-				"size":      curSize,
-				"fileCount": curCount,
-			}
+			progress := BuildProgressPayload(label, curSize, curCount, accumulatedSize, accumulatedReclaimable, rebootSafe)
 			sendSSEEvent(w, "progress", progress)
 			flusher.Flush()
 		})
@@ -131,6 +145,11 @@ func HandleTmpAnalyse(w http.ResponseWriter, r *http.Request) {
 		}
 		locations[i].Size = size
 		locations[i].FileCount = count
+
+		accumulatedSize += size
+		if rebootSafe {
+			accumulatedReclaimable += size
+		}
 
 		if err := sendSSEEvent(w, "location", locations[i]); err != nil {
 			return
