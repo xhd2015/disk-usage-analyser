@@ -1,5 +1,10 @@
 # Tmp Analyse Test Cases
 
+Run the tests:
+```sh
+doctest test -v ./
+```
+
 Feature: Tmp Files Analyse — analyze temp files and directories on the system,
 including trash size, to see how much space can be manually freed before reboot.
 

@@ -1,5 +1,10 @@
 # Tmp Files Analyse — Frontend Test Cases
 
+Run the tests:
+```sh
+doctest test -v ./
+```
+
 Feature: Tmp Files Analyse page — UI structure, navigation, scan interaction, and stop behavior.
 
 ## Test Tree

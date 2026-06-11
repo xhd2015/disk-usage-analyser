@@ -13,12 +13,6 @@ interface TmpLocation {
     rebootSafe: boolean;
 }
 
-interface TmpSummary {
-    locations: TmpLocation[];
-    totalSize: number;
-    reclaimableSize: number;
-}
-
 function formatBytes(bytes: number): string {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -48,9 +42,9 @@ function TmpFilesAnalyse() {
     const [scanning, setScanning] = useState(false);
     const [locations, setLocations] = useState<TmpLocation[]>(defaultLocations);
     const [locStatuses, setLocStatuses] = useState<Record<string, LocStatus>>({});
-    const [totalSize, setTotalSize] = useState(0);
-    const [reclaimableSize, setReclaimableSize] = useState(0);
     const eventSourceRef = useRef<EventSource | null>(null);
+    const totalSize = locations.reduce((sum, loc) => sum + loc.size, 0);
+    const reclaimableSize = locations.filter(loc => loc.rebootSafe).reduce((sum, loc) => sum + loc.size, 0);
 
     const startScan = () => {
         setScanning(true);
@@ -77,12 +71,6 @@ function TmpFilesAnalyse() {
                 p.label === loc.label ? { ...p, size: loc.size, fileCount: loc.fileCount, path: loc.path } : p
             ));
             setLocStatuses(prev => ({ ...prev, [loc.label]: 'done' }));
-        });
-
-        es.addEventListener('summary', (e) => {
-            const summary: TmpSummary = JSON.parse((e as MessageEvent).data);
-            setTotalSize(summary.totalSize);
-            setReclaimableSize(summary.reclaimableSize);
         });
 
         es.addEventListener('done', () => {
@@ -202,6 +190,11 @@ function TmpFilesAnalyse() {
                                 <Text type="secondary" style={{ fontSize: '12px' }}>
                                     {loc.fileCount > 0 ? `${loc.fileCount} files` : '--'}
                                 </Text>
+                                {loc.path && (
+                                    <div style={{ marginTop: '4px' }}>
+                                        <Text data-testid="card-path" type="secondary" style={{ fontSize: '11px', fontFamily: 'monospace', wordBreak: 'break-all' }}>{loc.path}</Text>
+                                    </div>
+                                )}
                             </Card>
                         </Col>
                     );
