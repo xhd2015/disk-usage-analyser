@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { useState } from 'react';
 import DiskUsage from './DiskUsage';
 import DiskManager from './DiskManager';
+import TmpFilesAnalyse from './TmpFilesAnalyse';
 import './App.css';
 
 function Home() {
@@ -57,6 +58,7 @@ function App() {
                 <Link to="/usage">Disk Usage</Link>
                 <Link to="/disks">Disk Manager</Link>
                 <Link to="/about">About</Link>
+                <Link to="/tmp-analyse">Tmp Files</Link>
             </nav>
 
             <Routes>
@@ -64,6 +66,7 @@ function App() {
                 <Route path="/about" element={<About />} />
                 <Route path="/usage" element={<DiskUsage />} />
                 <Route path="/disks" element={<DiskManager />} />
+                <Route path="/tmp-analyse" element={<TmpFilesAnalyse />} />
             </Routes>
         </Router>
     );

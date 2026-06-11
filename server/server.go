@@ -136,10 +136,12 @@ func Serve(port int, dev bool) error {
 
 	fmt.Printf("Serving directory preview at http://localhost:%d\n", port)
 
-	go func() {
-		time.Sleep(1 * time.Second)
-		web.OpenBrowser(fmt.Sprintf("http://localhost:%d", port))
-	}()
+	if os.Getenv("NO_BROWSER") != "1" {
+		go func() {
+			time.Sleep(1 * time.Second)
+			web.OpenBrowser(fmt.Sprintf("http://localhost:%d", port))
+		}()
+	}
 
 	return server.ListenAndServe()
 }
@@ -229,6 +231,7 @@ func RegisterAPI(mux *http.ServeMux) error {
 	mux.HandleFunc("/api/disks/mount", handleMountDisk)
 	mux.HandleFunc("/api/disks/unmount", handleUnmountDisk)
 	mux.HandleFunc("/api/disks/open", handleOpenDisk)
+	mux.HandleFunc("/api/tmp-analyse", HandleTmpAnalyse)
 
 	return nil
 }
