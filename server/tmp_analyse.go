@@ -56,6 +56,28 @@ func CalculateSize(fsys fs.FS, root string) (int64, int64, error) {
 	return size, count, err
 }
 
+func ScanWithProgress(fsys fs.FS, root string, onProgress func(size int64, count int64)) (int64, int64, error) {
+	var size int64
+	var count int64
+	err := fs.WalkDir(fsys, root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		size += info.Size()
+		count++
+		onProgress(size, count)
+		return nil
+	})
+	return size, count, err
+}
+
 func BuildSummary(locations []TmpLocation) TmpSummary {
 	var total, reclaimable int64
 	for _, loc := range locations {
@@ -93,9 +115,19 @@ func HandleTmpAnalyse(w http.ResponseWriter, r *http.Request) {
 
 	for i := range locations {
 		fsys := os.DirFS(locations[i].Path)
-		size, count, err := CalculateSize(fsys, ".")
+		label := locations[i].Label
+
+		size, count, err := ScanWithProgress(fsys, ".", func(curSize int64, curCount int64) {
+			progress := map[string]interface{}{
+				"label":     label,
+				"size":      curSize,
+				"fileCount": curCount,
+			}
+			sendSSEEvent(w, "progress", progress)
+			flusher.Flush()
+		})
 		if err != nil {
-			size, count = 0, 0
+			log.Printf("Error scanning %s: %v (accumulated: %d bytes, %d files)", locations[i].Path, err, size, count)
 		}
 		locations[i].Size = size
 		locations[i].FileCount = count

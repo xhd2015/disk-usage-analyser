@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { Button, Card, Space, Typography, Row, Col, Tag } from 'antd';
-import { PlayCircleOutlined, StopOutlined } from '@ant-design/icons';
+import { PlayCircleOutlined, StopOutlined, SyncOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;
 
@@ -42,24 +42,41 @@ const defaultLocations: TmpLocation[] = [
     { path: '', label: 'System Tmp', category: 'temp', size: 0, fileCount: 0, rebootSafe: false },
 ];
 
+type LocStatus = 'idle' | 'pending' | 'scanning' | 'done';
+
 function TmpFilesAnalyse() {
     const [scanning, setScanning] = useState(false);
     const [locations, setLocations] = useState<TmpLocation[]>(defaultLocations);
+    const [locStatuses, setLocStatuses] = useState<Record<string, LocStatus>>({});
     const [totalSize, setTotalSize] = useState(0);
     const [reclaimableSize, setReclaimableSize] = useState(0);
     const eventSourceRef = useRef<EventSource | null>(null);
 
     const startScan = () => {
         setScanning(true);
+        const pending: Record<string, LocStatus> = {};
+        defaultLocations.forEach(l => { pending[l.label] = 'pending'; });
+        setLocStatuses(pending);
 
         const es = new EventSource('/api/tmp-analyse');
         eventSourceRef.current = es;
+
+        es.addEventListener('progress', (e) => {
+            const p = JSON.parse((e as MessageEvent).data);
+            setLocations(prev => prev.map(loc =>
+                loc.label === p.label
+                    ? { ...loc, size: p.size, fileCount: p.fileCount }
+                    : loc
+            ));
+            setLocStatuses(prev => ({ ...prev, [p.label]: 'scanning' }));
+        });
 
         es.addEventListener('location', (e) => {
             const loc: TmpLocation = JSON.parse((e as MessageEvent).data);
             setLocations(prev => prev.map(p =>
                 p.label === loc.label ? { ...p, size: loc.size, fileCount: loc.fileCount, path: loc.path } : p
             ));
+            setLocStatuses(prev => ({ ...prev, [loc.label]: 'done' }));
         });
 
         es.addEventListener('summary', (e) => {
@@ -149,34 +166,46 @@ function TmpFilesAnalyse() {
             </Card>
 
             <Row gutter={[16, 16]}>
-                {locations.map((loc) => (
-                    <Col xs={24} sm={12} key={loc.label}>
-                        <Card
-                            data-testid={`card-${loc.category}`}
-                            size="small"
-                            title={
-                                <Space>
-                                    <Tag color={categoryColors[loc.category]}>{loc.category}</Tag>
-                                    <span data-testid="card-label">{loc.label}</span>
-                                </Space>
-                            }
-                            extra={
-                                loc.rebootSafe ? (
-                                    <Tag data-testid="reboot-safe-badge" color="green">Reboot Safe</Tag>
-                                ) : (
-                                    <Tag data-testid="reboot-safe-badge" color="default">Cleared on Reboot</Tag>
-                                )
-                            }
-                        >
-                            <div style={{ fontSize: '20px', fontWeight: 'bold' }} data-testid="card-size">
-                                {formatBytes(loc.size)}
-                            </div>
-                            <Text type="secondary" style={{ fontSize: '12px' }}>
-                                {loc.fileCount > 0 ? `${loc.fileCount} files` : '--'}
-                            </Text>
-                        </Card>
-                    </Col>
-                ))}
+                {locations.map((loc) => {
+                    const status = locStatuses[loc.label] || 'idle';
+                    return (
+                        <Col xs={24} sm={12} key={loc.label}>
+                            <Card
+                                data-testid={`card-${loc.category}`}
+                                size="small"
+                                title={
+                                    <Space>
+                                        <Tag color={categoryColors[loc.category]}>{loc.category}</Tag>
+                                        <span data-testid="card-label">{loc.label}</span>
+                                        {status === 'pending' && (
+                                            <span data-testid="pending-badge"><ClockCircleOutlined style={{ color: '#faad14' }} /></span>
+                                        )}
+                                        {status === 'scanning' && (
+                                            <span data-testid="scanning-badge"><SyncOutlined spin style={{ color: '#1677ff' }} /></span>
+                                        )}
+                                        {status === 'done' && (
+                                            <span data-testid="done-badge"><CheckCircleOutlined style={{ color: '#52c41a' }} /></span>
+                                        )}
+                                    </Space>
+                                }
+                                extra={
+                                    loc.rebootSafe ? (
+                                        <Tag data-testid="reboot-safe-badge" color="green">Reboot Safe</Tag>
+                                    ) : (
+                                        <Tag data-testid="reboot-safe-badge" color="default">Cleared on Reboot</Tag>
+                                    )
+                                }
+                            >
+                                <div style={{ fontSize: '20px', fontWeight: 'bold' }} data-testid="card-size">
+                                    {formatBytes(loc.size)}
+                                </div>
+                                <Text type="secondary" style={{ fontSize: '12px' }}>
+                                    {loc.fileCount > 0 ? `${loc.fileCount} files` : '--'}
+                                </Text>
+                            </Card>
+                        </Col>
+                    );
+                })}
             </Row>
         </div>
     );
