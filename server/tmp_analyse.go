@@ -85,6 +85,31 @@ func DiscoverLocations(homeDir string) []TmpLocation {
 		{Path: filepath.Join(homeDir, "Library", "Caches", "Homebrew"), Label: "Homebrew", Category: "brew", RebootSafe: true},
 		{Path: filepath.Join(homeDir, "Library", "Developer", "Xcode", "DerivedData"), Label: "Xcode", Category: "xcode", RebootSafe: true, ExtraPaths: []string{filepath.Join(homeDir, "Library", "Developer", "CoreSimulator", "Devices")}},
 		{Path: filepath.Join(homeDir, ".composer", "cache"), Label: "Composer", Category: "composer", RebootSafe: true},
+		{Path: filepath.Join(homeDir, ".local", "share", "opencode", "snapshot"), Label: "OpenCode", Category: "opencode", RebootSafe: true,
+			ExtraPaths: []string{
+				filepath.Join(homeDir, ".local", "share", "opencode", "project"),
+				filepath.Join(homeDir, ".local", "share", "opencode", "tool-output"),
+				filepath.Join(homeDir, ".local", "share", "opencode", "storage"),
+				filepath.Join(homeDir, ".local", "share", "opencode", "log"),
+				filepath.Join(homeDir, ".cache", "opencode"),
+				filepath.Join(homeDir, ".local", "state", "opencode"),
+			}},
+		{Path: filepath.Join(homeDir, ".claude", "plugins"), Label: "Claude Code", Category: "claude", RebootSafe: true,
+			ExtraPaths: []string{
+				filepath.Join(homeDir, ".claude", "telemetry"),
+				filepath.Join(homeDir, ".claude", "todos"),
+				filepath.Join(homeDir, ".claude", "cache"),
+				filepath.Join(homeDir, ".claude", "backups"),
+			}},
+		{Path: filepath.Join(homeDir, ".codex"), Label: "Codex (OpenAI)", Category: "codex", RebootSafe: true,
+			ExtraPaths: []string{
+				filepath.Join(homeDir, "Library", "Application Support", "codex"),
+			}},
+		{Path: filepath.Join(homeDir, "Library", "Application Support", "Cursor"), Label: "Cursor", Category: "cursor", RebootSafe: true,
+			ExtraPaths: []string{
+				filepath.Join(homeDir, "Library", "Application Support", "Caches", "cursor-updater"),
+				filepath.Join(homeDir, "Library", "Caches", "cursor-compile-cache"),
+			}},
 	}
 
 	for i := range softwareLocations {
