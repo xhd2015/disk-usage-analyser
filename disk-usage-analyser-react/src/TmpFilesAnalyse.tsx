@@ -5,16 +5,13 @@ import { PlayCircleOutlined, StopOutlined, SyncOutlined, CheckCircleOutlined, Cl
 const { Text } = Typography;
 
 interface TmpLocation {
-    path: string;
     label: string;
     category: string;
     size: number;
     fileCount: number;
     rebootSafe: boolean;
     detected: boolean;
-    extraPaths?: string[];
-    extraSizes?: number[];
-    extraCounts?: number[];
+    breakdownItems?: { path: string; size: number; fileCount: number }[];
 }
 
 function formatBytes(bytes: number): string {
@@ -118,7 +115,7 @@ function TmpFilesAnalyse() {
         es.addEventListener('location', (e) => {
             const loc: TmpLocation = JSON.parse((e as MessageEvent).data);
             setLocations(prev => prev.map(p =>
-                p.label === loc.label ? { ...p, size: loc.size, fileCount: loc.fileCount, path: loc.path, extraSizes: loc.extraSizes, extraCounts: loc.extraCounts } : p
+                p.label === loc.label ? { ...p, size: loc.size, fileCount: loc.fileCount, breakdownItems: loc.breakdownItems } : p
             ));
             setLocStatuses(prev => ({ ...prev, [loc.label]: 'done' }));
         });
@@ -160,6 +157,8 @@ function TmpFilesAnalyse() {
 
     const renderCard = (loc: TmpLocation) => {
         const status = locStatuses[loc.label] || 'idle';
+        const hasMultiBreakdown = loc.breakdownItems && loc.breakdownItems.length >= 2;
+        const hasSinglePath = loc.breakdownItems && loc.breakdownItems.length === 1;
 
         return (
             <Col xs={24} sm={12} key={loc.label}>
@@ -195,24 +194,25 @@ function TmpFilesAnalyse() {
                     <Text type="secondary" style={{ fontSize: '12px' }}>
                         {loc.fileCount > 0 ? `${loc.fileCount} files` : '--'}
                     </Text>
-                    {loc.path && (
-                        <div style={{ marginTop: '4px' }}>
-                            <Text data-testid="card-path" type="secondary" style={{ fontSize: '11px', fontFamily: 'monospace', wordBreak: 'break-all' }}>{loc.path}</Text>
-                        </div>
-                    )}
-                    {loc.extraPaths && loc.extraPaths.length > 0 && (
-                        <div data-testid="extra-breakdown" style={{ marginTop: '8px', paddingLeft: '8px', borderLeft: '2px solid #e8e8e8' }}>
-                            {loc.extraPaths.map((ep, idx) => (
-                                <div key={idx} data-testid={`extra-breakdown-row-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                    <Text data-testid={`extra-breakdown-label-${idx}`} type="secondary" style={{ fontSize: '11px', fontFamily: 'monospace' }}>
-                                        {ep}
+                    {hasMultiBreakdown ? (
+                        <div data-testid="breakdown-items" style={{ marginTop: '8px', paddingLeft: '8px', borderLeft: '2px solid #e8e8e8' }}>
+                            {loc.breakdownItems!.map((item, idx) => (
+                                <div key={idx} data-testid={`breakdown-row-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                    <Text data-testid={`breakdown-label-${idx}`} type="secondary" style={{ fontSize: '11px', fontFamily: 'monospace' }}>
+                                        {item.path}
                                     </Text>
-                                    <Text data-testid={`extra-breakdown-size-${idx}`} strong style={{ fontSize: '13px' }}>
-                                        {formatBytes((loc.extraSizes && loc.extraSizes[idx]) ? loc.extraSizes[idx] : 0)}
+                                    <Text data-testid={`breakdown-size-${idx}`} strong style={{ fontSize: '13px' }}>
+                                        {formatBytes(item.size)}
                                     </Text>
                                 </div>
                             ))}
                         </div>
+                    ) : (
+                        hasSinglePath && loc.breakdownItems![0].path && (
+                            <div style={{ marginTop: '4px' }}>
+                                <Text data-testid="card-path" type="secondary" style={{ fontSize: '11px', fontFamily: 'monospace', wordBreak: 'break-all' }}>{loc.breakdownItems![0].path}</Text>
+                            </div>
+                        )
                     )}
                 </Card>
             </Col>

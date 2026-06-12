@@ -13,16 +13,21 @@ import (
 )
 
 type TmpLocation struct {
-	Path        string   `json:"path"`
-	Label       string   `json:"label"`
-	Category    string   `json:"category"`
-	Size        int64    `json:"size"`
-	FileCount   int64    `json:"fileCount"`
-	RebootSafe  bool     `json:"rebootSafe"`
-	Detected    bool     `json:"detected"`
-	ExtraPaths  []string `json:"extraPaths,omitempty"`
-	ExtraSizes  []int64  `json:"extraSizes,omitempty"`
-	ExtraCounts []int64  `json:"extraCounts,omitempty"`
+	Path           string             `json:"-"`
+	Label          string             `json:"label"`
+	Category       string             `json:"category"`
+	Size           int64              `json:"size"`
+	FileCount      int64              `json:"fileCount"`
+	RebootSafe     bool               `json:"rebootSafe"`
+	Detected       bool               `json:"detected"`
+	ExtraPaths     []string           `json:"-"`
+	BreakdownItems []TmpBreakdownItem `json:"breakdownItems,omitempty"`
+}
+
+type TmpBreakdownItem struct {
+	Path      string `json:"path"`
+	Size      int64  `json:"size"`
+	FileCount int64  `json:"fileCount"`
 }
 
 type TmpSummary struct {
@@ -92,6 +97,11 @@ func DiscoverLocations(homeDir string) []TmpLocation {
 		for j := range all[i].ExtraPaths {
 			all[i].ExtraPaths[j] = tildePath(homeDir, all[i].ExtraPaths[j])
 		}
+		items := []TmpBreakdownItem{{Path: all[i].Path}}
+		for j := range all[i].ExtraPaths {
+			items = append(items, TmpBreakdownItem{Path: all[i].ExtraPaths[j]})
+		}
+		all[i].BreakdownItems = items
 	}
 	return all
 }
@@ -221,20 +231,14 @@ func HandleTmpAnalyse(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		primaryPath := resolveTildePath(locations[i].Path, homeDir)
 		label := locations[i].Label
 		rebootSafe := locations[i].RebootSafe
 
-		allPaths := []string{primaryPath}
-		for _, ep := range locations[i].ExtraPaths {
-			allPaths = append(allPaths, resolveTildePath(ep, homeDir))
-		}
-
 		var totalSize, totalCount int64
-		var extraSizes []int64
-		var extraCounts []int64
 
-		for pi, scanPath := range allPaths {
+		for bi := range locations[i].BreakdownItems {
+			scanPath := resolveTildePath(locations[i].BreakdownItems[bi].Path, homeDir)
+
 			fsys := os.DirFS(scanPath)
 			size, count, err := ScanWithProgress(fsys, ".", func(curSize int64, curCount int64) {
 				progress := BuildProgressPayload(label, curSize, curCount, accumulatedSize, accumulatedReclaimable, rebootSafe)
@@ -246,25 +250,15 @@ func HandleTmpAnalyse(w http.ResponseWriter, r *http.Request) {
 				size = 0
 				count = 0
 			}
-			if pi == 0 {
-				totalSize = size
-				totalCount = count
-			} else {
-				totalSize += size
-				totalCount += count
-				extraSizes = append(extraSizes, size)
-				extraCounts = append(extraCounts, count)
-			}
+
+			locations[i].BreakdownItems[bi].Size = size
+			locations[i].BreakdownItems[bi].FileCount = count
+			totalSize += size
+			totalCount += count
 		}
 
 		locations[i].Size = totalSize
 		locations[i].FileCount = totalCount
-		if len(extraSizes) > 0 {
-			locations[i].ExtraSizes = extraSizes
-		}
-		if len(extraCounts) > 0 {
-			locations[i].ExtraCounts = extraCounts
-		}
 
 		accumulatedSize += totalSize
 		if rebootSafe {

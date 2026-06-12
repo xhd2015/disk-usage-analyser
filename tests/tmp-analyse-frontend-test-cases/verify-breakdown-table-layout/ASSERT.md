@@ -1,8 +1,9 @@
 ## Expected
-- Go card has extra-breakdown-row-0 element with display:flex and justify-content:space-between
+- Go card has breakdown-row-1 element with display:flex and justify-content:space-between
 - Go row contains both label and size children
-- Xcode card has extra-breakdown-row-0 element with display:flex and justify-content:space-between
+- Xcode card has breakdown-row-1 element with display:flex and justify-content:space-between
 - Xcode row contains both label and size children
+- Uses unified breakdown-items wrapper, all rows share same `breakdown-row-{idx}` naming
 
 ```go
 import (
@@ -15,10 +16,10 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	}
 
 	for _, cat := range []string{"go", "xcode"} {
-		// Row element exists
-		rowLine := findLine(resp.Output, "ELEM "+cat+"-breakdown-row-0")
+		// Row element exists at index 1
+		rowLine := findLine(resp.Output, "ELEM "+cat+"-breakdown-row-1")
 		if rowLine == "" || strings.Contains(rowLine, "MISSING") {
-			t.Fatalf("expected extra-breakdown-row-0 for %s", cat)
+			t.Fatalf("expected breakdown-row-1 for %s", cat)
 		}
 
 		// Flexbox layout

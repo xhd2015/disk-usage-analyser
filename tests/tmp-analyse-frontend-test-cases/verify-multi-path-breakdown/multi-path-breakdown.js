@@ -15,37 +15,35 @@ async function check(selector, label) {
 await page.goto(`${BASE}/tmp-analyse`, { waitUntil: 'load' });
 await page.waitForTimeout(500);
 
-// Check Go card for extra breakdown
-await check('[data-testid="card-go"] [data-testid="extra-breakdown"]', 'card-go-extra-breakdown');
-await check('[data-testid="card-go"] [data-testid="extra-breakdown-label-0"]', 'card-go-extra-label-0');
-await check('[data-testid="card-go"] [data-testid="extra-breakdown-size-0"]', 'card-go-extra-size-0');
-// Check Go breakdown row layout
-await check('[data-testid="card-go"] [data-testid="extra-breakdown-row-0"]', 'card-go-extra-row-0');
+// Check Go card for unified breakdown
+await check('[data-testid="card-go"] [data-testid="breakdown-items"]', 'card-go-breakdown-items');
+await check('[data-testid="card-go"] [data-testid="breakdown-label-1"]', 'card-go-breakdown-label-1');
+await check('[data-testid="card-go"] [data-testid="breakdown-size-1"]', 'card-go-breakdown-size-1');
+await check('[data-testid="card-go"] [data-testid="breakdown-row-1"]', 'card-go-breakdown-row-1');
 
-// Check Xcode card for extra breakdown
-await check('[data-testid="card-xcode"] [data-testid="extra-breakdown"]', 'card-xcode-extra-breakdown');
-await check('[data-testid="card-xcode"] [data-testid="extra-breakdown-label-0"]', 'card-xcode-extra-label-0');
-await check('[data-testid="card-xcode"] [data-testid="extra-breakdown-size-0"]', 'card-xcode-extra-size-0');
-// Check Xcode breakdown row layout
-await check('[data-testid="card-xcode"] [data-testid="extra-breakdown-row-0"]', 'card-xcode-extra-row-0');
+// Check Xcode card for unified breakdown
+await check('[data-testid="card-xcode"] [data-testid="breakdown-items"]', 'card-xcode-breakdown-items');
+await check('[data-testid="card-xcode"] [data-testid="breakdown-label-1"]', 'card-xcode-breakdown-label-1');
+await check('[data-testid="card-xcode"] [data-testid="breakdown-size-1"]', 'card-xcode-breakdown-size-1');
+await check('[data-testid="card-xcode"] [data-testid="breakdown-row-1"]', 'card-xcode-breakdown-row-1');
 
 // Verify breakdown labels show full tilde paths (not truncated)
-const goLabelText = await page.$eval('[data-testid="card-go"] [data-testid="extra-breakdown-label-0"]', el => el.textContent).catch(() => '');
+const goLabelText = await page.$eval('[data-testid="card-go"] [data-testid="breakdown-label-1"]', el => el.textContent).catch(() => '');
 console.log(`FULL_PATH go-label-starts-with-tilde: ${goLabelText.startsWith('~/')}`);
 console.log(`FULL_PATH go-label-not-truncated: ${goLabelText.split('/').length > 3}`);
 
-const xcodeLabelText = await page.$eval('[data-testid="card-xcode"] [data-testid="extra-breakdown-label-0"]', el => el.textContent).catch(() => '');
+const xcodeLabelText = await page.$eval('[data-testid="card-xcode"] [data-testid="breakdown-label-1"]', el => el.textContent).catch(() => '');
 console.log(`FULL_PATH xcode-label-starts-with-tilde: ${xcodeLabelText.startsWith('~/')}`);
 console.log(`FULL_PATH xcode-label-not-truncated: ${xcodeLabelText.split('/').length > 3}`);
 
-// Single-path tools should NOT have extra breakdown
+// Single-path tools should NOT have breakdown-items
 const singlePathCats = ['npm', 'bun', 'docker', 'gradle', 'maven'];
 for (const cat of singlePathCats) {
-    const breakdownEl = await page.$(`[data-testid="card-${cat}"] [data-testid="extra-breakdown"]`);
+    const breakdownEl = await page.$(`[data-testid="card-${cat}"] [data-testid="breakdown-items"]`);
     if (breakdownEl) {
-        console.log(`ELEM card-${cat}-extra-breakdown: HAS_UNEXPECTED_BREAKDOWN`);
+        console.log(`ELEM card-${cat}-breakdown-items: HAS_UNEXPECTED_BREAKDOWN`);
     } else {
-        console.log(`ELEM card-${cat}-extra-breakdown: MISSING (expected, single-path)`);
+        console.log(`ELEM card-${cat}-breakdown-items: MISSING (expected, single-path)`);
     }
 }
 

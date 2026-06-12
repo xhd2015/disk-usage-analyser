@@ -1,6 +1,6 @@
 ## Preconditions
-- Go and Xcode cards show breakdown entries in table-like rows
-- Each row has data-testid="extra-breakdown-row-{idx}" and uses flexbox layout
+- Go and Xcode cards show breakdown items in table-like rows
+- Each row has data-testid="breakdown-row-{idx}" and uses flexbox layout
 
 ## Steps
 1. Set req.ScriptFile to "breakdown-table-layout.js"
