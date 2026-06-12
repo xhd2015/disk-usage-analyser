@@ -9,19 +9,20 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 type TmpLocation struct {
-	Path       string   `json:"path"`
-	Label      string   `json:"label"`
-	Category   string   `json:"category"`
-	Size       int64    `json:"size"`
-	FileCount  int64    `json:"fileCount"`
-	RebootSafe bool     `json:"rebootSafe"`
-	Detected   bool     `json:"detected"`
-	ExtraPaths []string `json:"extraPaths,omitempty"`
-	ExtraSizes []int64  `json:"extraSizes,omitempty"`
-	ExtraCounts []int64 `json:"extraCounts,omitempty"`
+	Path        string   `json:"path"`
+	Label       string   `json:"label"`
+	Category    string   `json:"category"`
+	Size        int64    `json:"size"`
+	FileCount   int64    `json:"fileCount"`
+	RebootSafe  bool     `json:"rebootSafe"`
+	Detected    bool     `json:"detected"`
+	ExtraPaths  []string `json:"extraPaths,omitempty"`
+	ExtraSizes  []int64  `json:"extraSizes,omitempty"`
+	ExtraCounts []int64  `json:"extraCounts,omitempty"`
 }
 
 type TmpSummary struct {
@@ -35,12 +36,29 @@ func pathExists(path string) bool {
 	return err == nil
 }
 
+func tildePath(homeDir string, path string) string {
+	if path == homeDir {
+		return "~"
+	}
+	if strings.HasPrefix(path, homeDir+string(filepath.Separator)) {
+		return "~" + path[len(homeDir):]
+	}
+	return path
+}
+
+func resolveTildePath(path string, homeDir string) string {
+	if strings.HasPrefix(path, "~/") {
+		return filepath.Join(homeDir, path[2:])
+	}
+	return path
+}
+
 func DiscoverLocations(homeDir string) []TmpLocation {
 	coreLocations := []TmpLocation{
 		{Path: filepath.Join(homeDir, ".Trash"), Label: "User Trash", Category: "trash", RebootSafe: true, Detected: true},
 		{Path: filepath.Join(homeDir, "Library", "Caches"), Label: "User Caches", Category: "cache", RebootSafe: true, Detected: true},
 		{Path: filepath.Join(homeDir, "Library", "Logs"), Label: "User Logs", Category: "log", RebootSafe: true, Detected: true},
-		{Path: os.TempDir(), Label: "System Temp", Category: "temp", RebootSafe: false, Detected: true},
+		{Path: "/tmp", Label: "System Temp", Category: "temp", RebootSafe: false, Detected: true},
 		{Path: "/tmp", Label: "System Tmp", Category: "temp", RebootSafe: false, Detected: true},
 	}
 
@@ -68,7 +86,14 @@ func DiscoverLocations(homeDir string) []TmpLocation {
 		softwareLocations[i].Detected = pathExists(softwareLocations[i].Path)
 	}
 
-	return append(coreLocations, softwareLocations...)
+	all := append(coreLocations, softwareLocations...)
+	for i := range all {
+		all[i].Path = tildePath(homeDir, all[i].Path)
+		for j := range all[i].ExtraPaths {
+			all[i].ExtraPaths[j] = tildePath(homeDir, all[i].ExtraPaths[j])
+		}
+	}
+	return all
 }
 
 func CalculateSize(fsys fs.FS, root string) (int64, int64, error) {
@@ -196,13 +221,14 @@ func HandleTmpAnalyse(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		primaryPath := locations[i].Path
+		primaryPath := resolveTildePath(locations[i].Path, homeDir)
 		label := locations[i].Label
 		rebootSafe := locations[i].RebootSafe
-		extraPaths := locations[i].ExtraPaths
 
 		allPaths := []string{primaryPath}
-		allPaths = append(allPaths, extraPaths...)
+		for _, ep := range locations[i].ExtraPaths {
+			allPaths = append(allPaths, resolveTildePath(ep, homeDir))
+		}
 
 		var totalSize, totalCount int64
 		var extraSizes []int64

@@ -31,4 +31,12 @@ console.log(`HAS_NONEMPTY_PATH: ${hasNonEmpty}`);
 const hasRecognizable = pathTexts.some(t => t && (t.includes('Trash') || t.includes('Caches') || t.includes('Logs') || t.includes('/tmp') || t.includes('Temp')));
 console.log(`HAS_RECOGNIZABLE_PATH: ${hasRecognizable}`);
 
+// Verify tilde prefix: home-relative paths should use ~ not /Users/
+const homeRelativePaths = pathTexts.filter(t => t && !t.startsWith('/tmp') && !t.startsWith('/usr/'));
+const hasTildePath = homeRelativePaths.some(t => t && t.startsWith('~/'));
+console.log(`HAS_TILDE_PATH: ${hasTildePath}`);
+
+const noRawHomeDir = !pathTexts.some(t => t && (t.includes('/Users/') || t.includes('/home/')));
+console.log(`NO_RAW_HOME_DIR: ${noRawHomeDir}`);
+
 console.log('DONE');

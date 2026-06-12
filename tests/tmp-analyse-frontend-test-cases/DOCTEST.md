@@ -24,7 +24,7 @@ tmp-analyse-frontend-test-cases/
 │   ├── SETUP.md
 │   ├── not-detected-collapse.js
 │   └── ASSERT.md
-├── verify-multi-path-breakdown/          # Go and Xcode cards show extra-path breakdown
+├── verify-multi-path-breakdown/          # Go and Xcode cards show extra-path breakdown with full ~ paths and table rows
 │   ├── SETUP.md
 │   ├── multi-path-breakdown.js
 │   └── ASSERT.md
@@ -48,15 +48,21 @@ tmp-analyse-frontend-test-cases/
 ├── verify-scan-progress/                 # Real-time size updates during scan
 ├── verify-scanning-indicator/            # Spinning icon shows while scanning
 ├── verify-totals-accumulate/             # Total/Reclaimable sizes accumulate during scan
-└── verify-location-path-shown/           # Path is displayed after scan completes
-```
+├── verify-location-path-shown/           # Path is displayed after scan completes, with ~ prefix
+│   ├── SETUP.md
+│   ├── location-path.js
+│   └── ASSERT.md
+└── verify-breakdown-table-layout/        # Breakdown entries use flexbox rows: path left, size right
+    ├── SETUP.md
+    ├── breakdown-table-layout.js
+    └── ASSERT.md
 
 ## Test Cases
 
 1. verify-page-renders — All expected DOM elements with data-testid exist, including core + software sections and collapse panel
 2. verify-software-cards-render — Each of 17 software tools has a card with label, size, and reboot-safe badge
 3. verify-not-detected-collapse — Non-detected tools appear in a collapsed "Not Detected" panel
-4. verify-multi-path-breakdown — Go and Xcode cards show extra-path size breakdown (module vs build cache)
+4. verify-multi-path-breakdown — Go and Xcode cards show extra-path size breakdown with full ~ paths in table-like rows
 5. verify-cards-from-locations-event — All cards render from SSE "locations" event before scan button is clicked
 6. verify-navigation — Nav link "Tmp Files" present, click goes to /tmp-analyse, page renders
 7. verify-scan-starts — Click start triggers SSE events, card sizes update, button toggles
@@ -65,7 +71,8 @@ tmp-analyse-frontend-test-cases/
 10. verify-scan-progress — Real-time size updates during scan
 11. verify-scanning-indicator — Spinning icon shows while scanning
 12. verify-totals-accumulate — Total/Reclaimable sizes accumulate during scan
-13. verify-location-path-shown — Path is displayed after scan completes
+13. verify-location-path-shown — Path is displayed after scan completes, with ~ prefix
+14. verify-breakdown-table-layout — Breakdown entries use flexbox rows: path left, size right, justify-content:space-between
 
 ## Prerequisites
 

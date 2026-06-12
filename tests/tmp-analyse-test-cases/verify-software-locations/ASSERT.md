@@ -2,10 +2,10 @@
 - There are exactly 17 software locations
 - Each software location has RebootSafe=true
 - Each has a non-empty Path, Label, Category distinct from core categories
-- Go location has a Path containing "go/pkg/mod" and ExtraPaths containing "Caches/go-build"
-- Xcode location has a Path containing "Xcode/DerivedData" and ExtraPaths containing "CoreSimulator"
-- npm location has Path containing ".npm"
-- Docker location has Path containing "com.docker.docker"
+- All home-relative paths use `~` prefix (e.g., `~/go/pkg/mod` instead of `/Users/testuser/go/pkg/mod`)
+- Go location has Path `~/go/pkg/mod` and ExtraPaths containing `~/Library/Caches/go-build`
+- Xcode location has Path `~/Library/Developer/Xcode/DerivedData` and ExtraPaths containing `~/Library/Developer/CoreSimulator/Devices`
+- Nginx path remains absolute (not under home dir): `/usr/local/var/log/nginx`
 - Single-path tools like npm, Bun, Docker have empty or nil ExtraPaths
 
 ```go
@@ -24,29 +24,29 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("expected 17 software locations, got %d", len(resp.Locations))
 	}
 
-	homeDir := req.HomeDir
 	expectedMap := map[string]struct{
 		pathSnippet string
 		label       string
 		hasExtras   bool
+		extraCheck  string // substring expected in ExtraPaths[0] (empty = no check)
 	}{
-		"go":       {filepath.Join(homeDir, "go", "pkg", "mod"), "Go", true},
-		"npm":      {filepath.Join(homeDir, ".npm"), "npm", false},
-		"bun":      {filepath.Join(homeDir, ".bun", "install", "cache"), "Bun", false},
-		"yarn":     {filepath.Join(homeDir, "Library", "Caches", "Yarn"), "Yarn", false},
-		"pnpm":     {filepath.Join(homeDir, "Library", "pnpm", "store"), "pnpm", false},
-		"pip":      {filepath.Join(homeDir, "Library", "Caches", "pip"), "pip", false},
-		"cargo":    {filepath.Join(homeDir, ".cargo", "registry", "cache"), "Cargo", false},
-		"ruby":     {filepath.Join(homeDir, ".gem"), "Ruby Gems", false},
-		"docker":   {filepath.Join(homeDir, "Library", "Containers", "com.docker.docker"), "Docker", false},
-		"podman":   {filepath.Join(homeDir, ".local", "share", "containers"), "Podman", false},
-		"nginx":    {"/usr/local/var/log/nginx", "Nginx", false},
-		"gradle":   {filepath.Join(homeDir, ".gradle", "caches"), "Gradle", false},
-		"maven":    {filepath.Join(homeDir, ".m2", "repository"), "Maven", false},
-		"android":  {filepath.Join(homeDir, "Library", "Android", "sdk"), "Android", false},
-		"brew":     {filepath.Join(homeDir, "Library", "Caches", "Homebrew"), "Homebrew", false},
-		"xcode":    {filepath.Join(homeDir, "Library", "Developer", "Xcode", "DerivedData"), "Xcode", true},
-		"composer": {filepath.Join(homeDir, ".composer", "cache"), "Composer", false},
+		"go":       {"~/go/pkg/mod", "Go", true, "~/Library/Caches/go-build"},
+		"npm":      {"~/.npm", "npm", false, ""},
+		"bun":      {"~/.bun/install/cache", "Bun", false, ""},
+		"yarn":     {"~/Library/Caches/Yarn", "Yarn", false, ""},
+		"pnpm":     {"~/Library/pnpm/store", "pnpm", false, ""},
+		"pip":      {"~/Library/Caches/pip", "pip", false, ""},
+		"cargo":    {"~/.cargo/registry/cache", "Cargo", false, ""},
+		"ruby":     {"~/.gem", "Ruby Gems", false, ""},
+		"docker":   {"~/Library/Containers/com.docker.docker", "Docker", false, ""},
+		"podman":   {"~/.local/share/containers", "Podman", false, ""},
+		"nginx":    {"/usr/local/var/log/nginx", "Nginx", false, ""},
+		"gradle":   {"~/.gradle/caches", "Gradle", false, ""},
+		"maven":    {"~/.m2/repository", "Maven", false, ""},
+		"android":  {"~/Library/Android/sdk", "Android", false, ""},
+		"brew":     {"~/Library/Caches/Homebrew", "Homebrew", false, ""},
+		"xcode":    {"~/Library/Developer/Xcode/DerivedData", "Xcode", true, "~/Library/Developer/CoreSimulator/Devices"},
+		"composer": {"~/.composer/cache", "Composer", false, ""},
 	}
 
 	for cat, exp := range expectedMap {
@@ -66,6 +66,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		if exp.hasExtras {
 			if len(found.ExtraPaths) == 0 {
 				t.Fatalf("location %s: expected ExtraPaths to be non-empty", cat)
+			}
+			if exp.extraCheck != "" {
+				if found.ExtraPaths[0] != exp.extraCheck {
+					t.Fatalf("location %s: expected ExtraPaths[0]=%s, got %s", cat, exp.extraCheck, found.ExtraPaths[0])
+				}
 			}
 		}
 	}

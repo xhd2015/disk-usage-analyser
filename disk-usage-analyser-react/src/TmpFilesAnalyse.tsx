@@ -156,16 +156,10 @@ function TmpFilesAnalyse() {
     const coreCategories = new Set(['trash', 'temp', 'cache', 'log']);
     const coreLocations = locations.filter(l => coreCategories.has(l.category));
     const softwareLocations = locations.filter(l => !coreCategories.has(l.category));
-    const detectedSoftware = softwareLocations.filter(l => l.detected);
     const notDetectedSoftware = softwareLocations.filter(l => !l.detected);
 
     const renderCard = (loc: TmpLocation) => {
         const status = locStatuses[loc.label] || 'idle';
-        const extraLabelShort = (p: string) => {
-            const parts = p.split('/');
-            const relevant = parts.slice(-2).join('/');
-            return relevant;
-        };
 
         return (
             <Col xs={24} sm={12} key={loc.label}>
@@ -209,9 +203,9 @@ function TmpFilesAnalyse() {
                     {loc.extraPaths && loc.extraPaths.length > 0 && (
                         <div data-testid="extra-breakdown" style={{ marginTop: '8px', paddingLeft: '8px', borderLeft: '2px solid #e8e8e8' }}>
                             {loc.extraPaths.map((ep, idx) => (
-                                <div key={idx} style={{ marginBottom: '4px' }}>
-                                    <Text data-testid={`extra-breakdown-label-${idx}`} type="secondary" style={{ fontSize: '11px', fontFamily: 'monospace', display: 'block' }}>
-                                        {extraLabelShort(ep)}
+                                <div key={idx} data-testid={`extra-breakdown-row-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                    <Text data-testid={`extra-breakdown-label-${idx}`} type="secondary" style={{ fontSize: '11px', fontFamily: 'monospace' }}>
+                                        {ep}
                                     </Text>
                                     <Text data-testid={`extra-breakdown-size-${idx}`} strong style={{ fontSize: '13px' }}>
                                         {formatBytes((loc.extraSizes && loc.extraSizes[idx]) ? loc.extraSizes[idx] : 0)}
@@ -293,7 +287,7 @@ function TmpFilesAnalyse() {
             <div data-testid="section-software">
                 <h2 data-testid="section-software-heading" style={{ fontSize: '16px', marginBottom: '12px' }}>Developer Tools</h2>
                 <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
-                    {detectedSoftware.map(renderCard)}
+                    {softwareLocations.map(renderCard)}
                 </Row>
             </div>
 

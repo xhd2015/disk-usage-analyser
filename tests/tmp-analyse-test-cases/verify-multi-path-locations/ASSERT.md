@@ -1,7 +1,8 @@
 ## Expected
-- Go location has exactly 1 ExtraPath pointing to the go build cache
-- Xcode location has exactly 1 ExtraPath pointing to CoreSimulator Devices
+- Go location has exactly 1 ExtraPath: `~/Library/Caches/go-build` (tilde-prefixed, full path)
+- Xcode location has exactly 1 ExtraPath: `~/Library/Developer/CoreSimulator/Devices` (tilde-prefixed, full path)
 - All other 15 single-path software locations have empty ExtraPaths (length 0)
+- ExtraPaths use `~` prefix (not absolute home directory)
 
 ```go
 import (
@@ -19,6 +20,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("expected 17 software locations, got %d", len(resp.Locations))
 	}
 
+	expectedExtraPaths := map[string]string{
+		"go":    "~/Library/Caches/go-build",
+		"xcode": "~/Library/Developer/CoreSimulator/Devices",
+	}
+
 	multiPathCats := map[string]int{"go": 1, "xcode": 1}
 	for _, loc := range resp.Locations {
 		expectedExtraCount, isMulti := multiPathCats[loc.Category]
@@ -26,15 +32,9 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 			if len(loc.ExtraPaths) != expectedExtraCount {
 				t.Fatalf("location %s: expected %d ExtraPaths, got %d", loc.Category, expectedExtraCount, len(loc.ExtraPaths))
 			}
-			if loc.Category == "go" {
-				if !strings.Contains(loc.ExtraPaths[0], "Caches/go-build") && !strings.Contains(loc.ExtraPaths[0], "Cache/go-build") {
-					t.Fatalf("Go ExtraPaths[0] should contain go-build cache path, got: %s", loc.ExtraPaths[0])
-				}
-			}
-			if loc.Category == "xcode" {
-				if !strings.Contains(loc.ExtraPaths[0], "CoreSimulator") {
-					t.Fatalf("Xcode ExtraPaths[0] should contain CoreSimulator path, got: %s", loc.ExtraPaths[0])
-				}
+			expected := expectedExtraPaths[loc.Category]
+			if loc.ExtraPaths[0] != expected {
+				t.Fatalf("location %s: expected ExtraPaths[0]=%s, got %s", loc.Category, expected, loc.ExtraPaths[0])
 			}
 		} else {
 			if len(loc.ExtraPaths) != 0 {

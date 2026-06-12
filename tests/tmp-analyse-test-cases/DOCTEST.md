@@ -28,25 +28,27 @@ tmp-analyse-test-cases/
 ├── verify-sse-format/                    # SSE handler emits all expected event types
 ├── verify-progress-stream/               # ScanWithProgress fires progress callbacks
 ├── verify-scan-with-partial-error/       # Error handling during scan
-└── verify-totals-in-progress/            # BuildProgressPayload accumulates totals correctly
+├── verify-totals-in-progress/            # BuildProgressPayload accumulates totals correctly
+└── verify-tilde-paths/                   # All home-relative paths use ~ prefix, not raw /Users/
 ```
 
 ## Test Cases
 
 1. verify-discover-locations — DiscoverLocations returns 22+ locations (5 core + 17 software) with Detected flags
-2. verify-software-locations — Each software location has correct label, category, RebootSafe=true; Go and Xcode have ExtraPaths
+2. verify-software-locations — Each software location has correct label, category, RebootSafe=true; Go and Xcode have ExtraPaths; paths use ~ prefix
 3. verify-detected-by-existence — Real existing dir (e.g. /tmp) gets Detected=true; non-existing gets Detected=false
-4. verify-multi-path-locations — Go has 2 ExtraPaths, Xcode has 1; single-path tools have none
+4. verify-multi-path-locations — Go has 1 ExtraPath, Xcode has 1; single-path tools have none; ExtraPaths use ~ prefix
 5. verify-initial-locations-event — Handler sends "event: locations" as first SSE event with full JSON array
 6. verify-unsupported-platform — Non-darwin sends unsupported_platform event and no scan
 7. verify-extra-path-scan — Multi-path scanning populates ExtraSizes/ExtraCounts arrays
 8. verify-locations-rest-endpoint — REST endpoint returns locations JSON array without scanning
 9. verify-calculate-size — CalculateSize on mock FS with 3 files returns correct total bytes and file count
-9. verify-empty-dir — CalculateSize on empty FS returns size=0, count=0, no error
-10. verify-nested-dirs — CalculateSize recursively sums files in nested subdirectories
-11. verify-summary-totals — BuildSummary correctly separates total vs reclaimable (rebootSafe) sizes
-12. verify-sse-format — SSE handler emits locations, location, summary, done events with valid JSON
-13. verify-progress-stream — ScanWithProgress fires progress callbacks
-14. verify-scan-with-partial-error — Error handling during scan
-15. verify-totals-in-progress — BuildProgressPayload accumulates totals correctly
+10. verify-empty-dir — CalculateSize on empty FS returns size=0, count=0, no error
+11. verify-nested-dirs — CalculateSize recursively sums files in nested subdirectories
+12. verify-summary-totals — BuildSummary correctly separates total vs reclaimable (rebootSafe) sizes
+13. verify-sse-format — SSE handler emits locations, location, summary, done events with valid JSON
+14. verify-progress-stream — ScanWithProgress fires progress callbacks
+15. verify-scan-with-partial-error — Error handling during scan
+16. verify-totals-in-progress — BuildProgressPayload accumulates totals correctly
+17. verify-tilde-paths — All home-relative paths and ExtraPaths use ~ prefix; no raw home directory in any path
 ```
