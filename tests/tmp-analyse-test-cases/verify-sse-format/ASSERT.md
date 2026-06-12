@@ -1,4 +1,5 @@
 ## Expected
+- SSE output contains at least one "event: locations" line (first event, sent before scanning)
 - SSE output contains at least one "event: location" line
 - SSE output contains "event: summary" line
 - SSE output contains "event: done" line
@@ -19,6 +20,9 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	}
 	if resp.SSEOutput == "" {
 		t.Fatal("expected SSE events, got empty output")
+	}
+	if !strings.Contains(resp.SSEOutput, "event: locations") {
+		t.Fatal("expected SSE output to contain 'event: locations' (initial full list)")
 	}
 	if !strings.Contains(resp.SSEOutput, "event: location") {
 		t.Fatal("expected SSE output to contain 'event: location'")

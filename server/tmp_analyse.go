@@ -8,15 +8,20 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 type TmpLocation struct {
-	Path       string `json:"path"`
-	Label      string `json:"label"`
-	Category   string `json:"category"`
-	Size       int64  `json:"size"`
-	FileCount  int64  `json:"fileCount"`
-	RebootSafe bool   `json:"rebootSafe"`
+	Path       string   `json:"path"`
+	Label      string   `json:"label"`
+	Category   string   `json:"category"`
+	Size       int64    `json:"size"`
+	FileCount  int64    `json:"fileCount"`
+	RebootSafe bool     `json:"rebootSafe"`
+	Detected   bool     `json:"detected"`
+	ExtraPaths []string `json:"extraPaths,omitempty"`
+	ExtraSizes []int64  `json:"extraSizes,omitempty"`
+	ExtraCounts []int64 `json:"extraCounts,omitempty"`
 }
 
 type TmpSummary struct {
@@ -25,14 +30,45 @@ type TmpSummary struct {
 	ReclaimableSize int64         `json:"reclaimableSize"`
 }
 
+func pathExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
 func DiscoverLocations(homeDir string) []TmpLocation {
-	return []TmpLocation{
-		{Path: filepath.Join(homeDir, ".Trash"), Label: "User Trash", Category: "trash", RebootSafe: true},
-		{Path: filepath.Join(homeDir, "Library", "Caches"), Label: "User Caches", Category: "cache", RebootSafe: true},
-		{Path: filepath.Join(homeDir, "Library", "Logs"), Label: "User Logs", Category: "log", RebootSafe: true},
-		{Path: os.TempDir(), Label: "System Temp", Category: "temp", RebootSafe: false},
-		{Path: "/tmp", Label: "System Tmp", Category: "temp", RebootSafe: false},
+	coreLocations := []TmpLocation{
+		{Path: filepath.Join(homeDir, ".Trash"), Label: "User Trash", Category: "trash", RebootSafe: true, Detected: true},
+		{Path: filepath.Join(homeDir, "Library", "Caches"), Label: "User Caches", Category: "cache", RebootSafe: true, Detected: true},
+		{Path: filepath.Join(homeDir, "Library", "Logs"), Label: "User Logs", Category: "log", RebootSafe: true, Detected: true},
+		{Path: os.TempDir(), Label: "System Temp", Category: "temp", RebootSafe: false, Detected: true},
+		{Path: "/tmp", Label: "System Tmp", Category: "temp", RebootSafe: false, Detected: true},
 	}
+
+	softwareLocations := []TmpLocation{
+		{Path: filepath.Join(homeDir, "go", "pkg", "mod"), Label: "Go", Category: "go", RebootSafe: true, ExtraPaths: []string{filepath.Join(homeDir, "Library", "Caches", "go-build")}},
+		{Path: filepath.Join(homeDir, ".npm"), Label: "npm", Category: "npm", RebootSafe: true},
+		{Path: filepath.Join(homeDir, ".bun", "install", "cache"), Label: "Bun", Category: "bun", RebootSafe: true},
+		{Path: filepath.Join(homeDir, "Library", "Caches", "Yarn"), Label: "Yarn", Category: "yarn", RebootSafe: true},
+		{Path: filepath.Join(homeDir, "Library", "pnpm", "store"), Label: "pnpm", Category: "pnpm", RebootSafe: true},
+		{Path: filepath.Join(homeDir, "Library", "Caches", "pip"), Label: "pip", Category: "pip", RebootSafe: true},
+		{Path: filepath.Join(homeDir, ".cargo", "registry", "cache"), Label: "Cargo", Category: "cargo", RebootSafe: true},
+		{Path: filepath.Join(homeDir, ".gem"), Label: "Ruby Gems", Category: "ruby", RebootSafe: true},
+		{Path: filepath.Join(homeDir, "Library", "Containers", "com.docker.docker"), Label: "Docker", Category: "docker", RebootSafe: true},
+		{Path: filepath.Join(homeDir, ".local", "share", "containers"), Label: "Podman", Category: "podman", RebootSafe: true},
+		{Path: "/usr/local/var/log/nginx", Label: "Nginx", Category: "nginx", RebootSafe: true},
+		{Path: filepath.Join(homeDir, ".gradle", "caches"), Label: "Gradle", Category: "gradle", RebootSafe: true},
+		{Path: filepath.Join(homeDir, ".m2", "repository"), Label: "Maven", Category: "maven", RebootSafe: true},
+		{Path: filepath.Join(homeDir, "Library", "Android", "sdk"), Label: "Android", Category: "android", RebootSafe: true},
+		{Path: filepath.Join(homeDir, "Library", "Caches", "Homebrew"), Label: "Homebrew", Category: "brew", RebootSafe: true},
+		{Path: filepath.Join(homeDir, "Library", "Developer", "Xcode", "DerivedData"), Label: "Xcode", Category: "xcode", RebootSafe: true, ExtraPaths: []string{filepath.Join(homeDir, "Library", "Developer", "CoreSimulator", "Devices")}},
+		{Path: filepath.Join(homeDir, ".composer", "cache"), Label: "Composer", Category: "composer", RebootSafe: true},
+	}
+
+	for i := range softwareLocations {
+		softwareLocations[i].Detected = pathExists(softwareLocations[i].Path)
+	}
+
+	return append(coreLocations, softwareLocations...)
 }
 
 func CalculateSize(fsys fs.FS, root string) (int64, int64, error) {
@@ -108,6 +144,20 @@ func BuildProgressPayload(label string, curSize, curCount int64, accumulatedSize
 	}
 }
 
+func HandleTmpAnalyseLocations(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	locations := DiscoverLocations(homeDir)
+	json.NewEncoder(w).Encode(locations)
+}
+
 func HandleTmpAnalyse(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -120,6 +170,12 @@ func HandleTmpAnalyse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if runtime.GOOS != "darwin" {
+		sendSSEEvent(w, "unsupported_platform", map[string]string{"os": runtime.GOOS})
+		flusher.Flush()
+		return
+	}
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		sendSSEEvent(w, "server_error", map[string]string{"error": err.Error()})
@@ -128,27 +184,65 @@ func HandleTmpAnalyse(w http.ResponseWriter, r *http.Request) {
 
 	locations := DiscoverLocations(homeDir)
 
+	if err := sendSSEEvent(w, "locations", locations); err != nil {
+		return
+	}
+	flusher.Flush()
+
 	var accumulatedSize, accumulatedReclaimable int64
 
 	for i := range locations {
-		fsys := os.DirFS(locations[i].Path)
+		if !locations[i].Detected {
+			continue
+		}
+
+		primaryPath := locations[i].Path
 		label := locations[i].Label
 		rebootSafe := locations[i].RebootSafe
+		extraPaths := locations[i].ExtraPaths
 
-		size, count, err := ScanWithProgress(fsys, ".", func(curSize int64, curCount int64) {
-			progress := BuildProgressPayload(label, curSize, curCount, accumulatedSize, accumulatedReclaimable, rebootSafe)
-			sendSSEEvent(w, "progress", progress)
-			flusher.Flush()
-		})
-		if err != nil {
-			log.Printf("Error scanning %s: %v (accumulated: %d bytes, %d files)", locations[i].Path, err, size, count)
+		allPaths := []string{primaryPath}
+		allPaths = append(allPaths, extraPaths...)
+
+		var totalSize, totalCount int64
+		var extraSizes []int64
+		var extraCounts []int64
+
+		for pi, scanPath := range allPaths {
+			fsys := os.DirFS(scanPath)
+			size, count, err := ScanWithProgress(fsys, ".", func(curSize int64, curCount int64) {
+				progress := BuildProgressPayload(label, curSize, curCount, accumulatedSize, accumulatedReclaimable, rebootSafe)
+				sendSSEEvent(w, "progress", progress)
+				flusher.Flush()
+			})
+			if err != nil {
+				log.Printf("Error scanning %s (%s): %v (got %d bytes, %d files)", label, scanPath, err, size, count)
+				size = 0
+				count = 0
+			}
+			if pi == 0 {
+				totalSize = size
+				totalCount = count
+			} else {
+				totalSize += size
+				totalCount += count
+				extraSizes = append(extraSizes, size)
+				extraCounts = append(extraCounts, count)
+			}
 		}
-		locations[i].Size = size
-		locations[i].FileCount = count
 
-		accumulatedSize += size
+		locations[i].Size = totalSize
+		locations[i].FileCount = totalCount
+		if len(extraSizes) > 0 {
+			locations[i].ExtraSizes = extraSizes
+		}
+		if len(extraCounts) > 0 {
+			locations[i].ExtraCounts = extraCounts
+		}
+
+		accumulatedSize += totalSize
 		if rebootSafe {
-			accumulatedReclaimable += size
+			accumulatedReclaimable += totalSize
 		}
 
 		if err := sendSSEEvent(w, "location", locations[i]); err != nil {

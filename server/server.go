@@ -231,6 +231,7 @@ func RegisterAPI(mux *http.ServeMux) error {
 	mux.HandleFunc("/api/disks/mount", handleMountDisk)
 	mux.HandleFunc("/api/disks/unmount", handleUnmountDisk)
 	mux.HandleFunc("/api/disks/open", handleOpenDisk)
+	mux.HandleFunc("/api/tmp-analyse-locations", HandleTmpAnalyseLocations)
 	mux.HandleFunc("/api/tmp-analyse", HandleTmpAnalyse)
 
 	return nil

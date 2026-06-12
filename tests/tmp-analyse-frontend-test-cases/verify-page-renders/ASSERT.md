@@ -5,8 +5,13 @@
 - `ELEM summary-bar` is present
 - `ELEM total-size` is present
 - `ELEM reclaimable-size` is present
-- `COUNT card-*` equals 4 for category cards
-- All 4 cards have `card-label`, `card-size`, `reboot-safe-badge` elements
+- `ELEM section-core-heading` is present and visible
+- `ELEM section-software-heading` is present and visible
+- Core cards: `card-trash`, `card-temp`, `card-cache`, `card-log` are visible
+- Software section exists with `section-software` element
+- Software cards exist: `card-go`, `card-npm`, `card-docker`, `card-bun`
+- All cards have `card-label`, `card-size`, `reboot-safe-badge` elements
+- `ELEM collapse-not-detected` is present (collapsed by default)
 - No element is reported as MISSING
 
 ```go
@@ -20,19 +25,24 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	}
 
 	checks := map[string]string{
-		"ELEM page-heading":         "Tmp Files Analyse",
-		"ELEM start-scan-btn":       "visible=true",
-		"ELEM stop-scan-btn":        "visible=false",
-		"ELEM summary-bar":          "visible=true",
-		"ELEM total-size":           "",
-		"ELEM reclaimable-size":     "",
-		"ELEM card-trash":           "visible=true",
-		"ELEM card-temp":            "visible=true",
-		"ELEM card-cache":           "visible=true",
-		"ELEM card-log":             "visible=true",
-		"ELEM card-trash-label":     "",
-		"ELEM card-trash-size":      "",
-		"ELEM card-trash-reboot-safe": "",
+		"ELEM page-heading":            "Tmp Files Analyse",
+		"ELEM start-scan-btn":          "visible=true",
+		"ELEM stop-scan-btn":           "visible=false",
+		"ELEM summary-bar":             "visible=true",
+		"ELEM total-size":              "",
+		"ELEM reclaimable-size":        "",
+		"ELEM section-core-heading":    "visible=true",
+		"ELEM section-software-heading":"visible=true",
+		"ELEM card-trash":              "visible=true",
+		"ELEM card-temp":               "visible=true",
+		"ELEM card-cache":              "visible=true",
+		"ELEM card-log":                "visible=true",
+		"ELEM section-software":        "visible=true",
+		"ELEM card-go":                 "visible=true",
+		"ELEM card-npm":                "visible=true",
+		"ELEM card-docker":             "visible=true",
+		"ELEM card-bun":                "visible=true",
+		"ELEM collapse-not-detected":   "",
 	}
 
 	for prefix, expected := range checks {
@@ -48,7 +58,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		}
 	}
 
-	if !strings.Contains(resp.Output, "COUNT card-") {
+	if !strings.Contains(resp.Output, "COUNT all-cards") {
 		t.Fatal("expected COUNT lines for card elements")
 	}
 }

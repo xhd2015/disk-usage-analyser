@@ -1,6 +1,7 @@
 ## Preconditions
 - An SSE handler is registered at /api/tmp-analyse
 - The handler streams location data as Server-Sent Events
+- The handler first sends a "locations" event with all discovered locations before scanning
 
 ## Steps
 1. Create an httptest server with the HandleTmpAnalyse handler
@@ -10,7 +11,7 @@
 
 ## Context
 - SSE format: "event: <type>\ndata: <json>\n\n"
-- Expected event types: "location" (for each location), "summary" (for totals), "done" (for completion)
+- Expected event types: "locations" (before scanning, full list), "location" (per completed location), "summary" (totals), "done" (completion)
 - Event data must be valid JSON
 
 ```go
