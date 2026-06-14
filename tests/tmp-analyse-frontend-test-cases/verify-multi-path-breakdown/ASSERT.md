@@ -51,7 +51,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	}
 
 	// Single-path tools should NOT have breakdown-items
-	singlePathCats := []string{"npm", "bun", "docker", "gradle", "maven"}
+	singlePathCats := []string{"bun", "docker", "gradle", "maven"}
 	for _, cat := range singlePathCats {
 		line := findLine(resp.Output, "ELEM card-"+cat+"-breakdown-items")
 		if line != "" && !strings.Contains(line, "MISSING") {

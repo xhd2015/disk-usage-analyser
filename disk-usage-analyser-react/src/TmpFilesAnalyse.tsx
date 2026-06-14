@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { Button, Card, Space, Typography, Row, Col, Tag, Collapse, Alert } from 'antd';
-import { PlayCircleOutlined, StopOutlined, SyncOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { Button, Card, Space, Typography, Row, Col, Tag, Collapse, Alert, Popover } from 'antd';
+import { PlayCircleOutlined, StopOutlined, SyncOutlined, CheckCircleOutlined, ClockCircleOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;
 
@@ -10,8 +10,15 @@ interface TmpLocation {
     size: number;
     fileCount: number;
     rebootSafe: boolean;
+    reclaimable: boolean;
     detected: boolean;
     breakdownItems?: { path: string; size: number; fileCount: number }[];
+}
+
+interface CleanupSuggestion {
+    command: string;
+    removes: string;
+    recoverable: string;
 }
 
 function formatBytes(bytes: number): string {
@@ -22,11 +29,93 @@ function formatBytes(bytes: number): string {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
+const cleanupSuggestions: Record<string, CleanupSuggestion[]> = {
+    trash: [
+        { command: 'rm -rf ~/.Trash/*', removes: 'Everything in Trash', recoverable: 'Permanently deleted; cannot recover' },
+    ],
+    cache: [
+        { command: 'rm -rf ~/Library/Caches/*', removes: 'All application caches', recoverable: 'Yes, apps recreate on next launch' },
+    ],
+    log: [
+        { command: 'rm -rf ~/Library/Logs/*', removes: 'All user log files', recoverable: 'Yes, apps recreate log files automatically' },
+    ],
+    temp: [
+        { command: 'rm -rf /tmp/*', removes: 'All temporary files', recoverable: 'Cleared on reboot; safe to delete' },
+    ],
+    go: [
+        { command: 'go clean -cache', removes: '~/Library/Caches/go-build', recoverable: 'Yes, rebuilt automatically on next go build' },
+        { command: 'go clean -modcache', removes: '~/go/pkg/mod', recoverable: 'Yes, re-downloaded automatically on next build' },
+    ],
+    npm: [
+        { command: 'npm cache clean --force', removes: '~/.npm/_cacache/', recoverable: 'Yes, re-downloaded automatically on npm install' },
+        { command: 'npm cache verify', removes: 'Nothing (verifies cache integrity only)', recoverable: 'No files removed' },
+    ],
+    bun: [
+        { command: 'rm -rf ~/.bun/install/cache', removes: 'Bun package cache', recoverable: 'Yes, re-downloaded on bun install' },
+    ],
+    yarn: [
+        { command: 'yarn cache clean', removes: 'Yarn package cache', recoverable: 'Yes, re-downloaded on yarn install' },
+    ],
+    pnpm: [
+        { command: 'pnpm store prune', removes: 'Unused packages from pnpm store', recoverable: 'Yes, re-downloaded if needed' },
+    ],
+    pip: [
+        { command: 'pip cache purge', removes: 'pip download cache', recoverable: 'Yes, re-downloaded on pip install' },
+    ],
+    cargo: [
+        { command: 'rm -rf ~/.cargo/registry/cache', removes: 'Rust crate cache', recoverable: 'Yes, re-downloaded on cargo build' },
+    ],
+    ruby: [
+        { command: 'gem cleanup', removes: 'Old gem versions', recoverable: 'Yes, current versions kept; old can be reinstalled' },
+    ],
+    docker: [
+        { command: 'docker system prune -a', removes: 'Unused images, build cache, volumes', recoverable: 'Yes, re-pulled/rebuilt when needed' },
+    ],
+    podman: [
+        { command: 'podman system prune', removes: 'Unused images, build cache', recoverable: 'Yes, re-pulled/rebuilt when needed' },
+    ],
+    nginx: [
+        { command: 'rm -f /usr/local/var/log/nginx/*.log', removes: 'Nginx access and error logs', recoverable: 'Yes, log files auto-created on next access' },
+    ],
+    gradle: [
+        { command: 'rm -rf ~/.gradle/caches', removes: 'Gradle build cache', recoverable: 'Yes, rebuilt on next Gradle build' },
+    ],
+    maven: [
+        { command: 'rm -rf ~/.m2/repository', removes: 'All downloaded Maven artifacts', recoverable: 'Yes, re-downloaded on next Maven build' },
+    ],
+    android: [
+        { command: 'rm -rf ~/Library/Android/sdk/.temp', removes: 'Android SDK temporary files', recoverable: 'Yes, recreated if needed' },
+    ],
+    brew: [
+        { command: 'brew cleanup', removes: 'Old formula versions', recoverable: 'Yes, current versions kept; re-downloadable' },
+    ],
+    xcode: [
+        { command: 'rm -rf ~/Library/Developer/Xcode/DerivedData', removes: 'Xcode build products', recoverable: 'Yes, rebuilt on next Xcode build' },
+        { command: 'xcrun simctl shutdown all && xcrun simctl delete all', removes: 'All iOS Simulators (devices)', recoverable: 'Yes, recreated via Xcode > Settings > Devices' },
+    ],
+    composer: [
+        { command: 'composer clear-cache', removes: 'PHP Composer package cache', recoverable: 'Yes, re-downloaded on composer install' },
+    ],
+    opencode: [
+        { command: 'rm -rf ~/.local/share/opencode/snapshot ~/.local/share/opencode/project ~/.local/share/opencode/tool-output ~/.local/share/opencode/storage ~/.local/share/opencode/log ~/.cache/opencode ~/.local/state/opencode', removes: 'OpenCode caches, snapshots, logs', recoverable: 'Some auto-recreated; snapshots lost permanently' },
+    ],
+    claude: [
+        { command: 'rm -rf ~/.claude/cache', removes: 'Claude Code cache', recoverable: 'Yes, recreated on next use' },
+    ],
+    codex: [
+        { command: 'rm -rf ~/.codex ~/Library/Application\\ Support/codex', removes: 'Codex (OpenAI) caches', recoverable: 'Some auto-recreated; settings may be lost' },
+    ],
+    cursor: [
+        { command: 'rm -rf ~/Library/Application\\ Support/Cursor ~/Library/Application\\ Support/Caches/cursor-updater ~/Library/Caches/cursor-compile-cache', removes: 'Cursor caches and updater files', recoverable: 'Some auto-recreated; settings may be lost' },
+    ],
+};
+
 const categoryColors: Record<string, string> = {
     trash: 'red',
     temp: 'orange',
     cache: 'blue',
     log: 'purple',
+    swap: 'default',
     go: 'cyan',
     npm: 'green',
     bun: 'lime',
@@ -150,10 +239,54 @@ function TmpFilesAnalyse() {
         setScanning(false);
     };
 
-    const coreCategories = new Set(['trash', 'temp', 'cache', 'log']);
+    const coreCategories = new Set(['trash', 'temp', 'cache', 'log', 'swap']);
     const coreLocations = locations.filter(l => coreCategories.has(l.category));
     const softwareLocations = locations.filter(l => !coreCategories.has(l.category));
     const notDetectedSoftware = softwareLocations.filter(l => !l.detected);
+
+    const renderCleanupPopover = (loc: TmpLocation) => {
+        if (loc.category === 'swap') {
+            return (
+                <div style={{ maxWidth: '300px' }}>
+                    <Text>Cannot be reclaimed -- managed by macOS</Text>
+                </div>
+            );
+        }
+
+        const suggestions = cleanupSuggestions[loc.category];
+        if (!suggestions || suggestions.length === 0) {
+            return (
+                <div style={{ maxWidth: '300px' }}>
+                    <Text type="secondary">No standard cleanup commands available. Consider manual removal of the listed paths.</Text>
+                </div>
+            );
+        }
+
+        return (
+            <div style={{ maxWidth: '400px' }}>
+                {suggestions.map((s, idx) => (
+                    <div key={idx} data-testid={`cleanup-suggestion-${loc.category}-${idx}`} style={{ marginBottom: idx < suggestions.length - 1 ? '12px' : 0 }}>
+                        <div>
+                            <Text strong style={{ fontSize: '12px' }}>Command:</Text>
+                            <div style={{ background: '#f5f5f5', padding: '4px 8px', borderRadius: '4px', marginTop: '2px' }}>
+                                <Text code style={{ fontSize: '11px', wordBreak: 'break-all' }}>{s.command}</Text>
+                            </div>
+                        </div>
+                        <div style={{ marginTop: '4px' }}>
+                            <Text style={{ fontSize: '11px' }}>
+                                <strong>Files removed:</strong> {s.removes}
+                            </Text>
+                        </div>
+                        <div style={{ marginTop: '2px' }}>
+                            <Text style={{ fontSize: '11px' }}>
+                                <strong>Recoverability:</strong> {s.recoverable}
+                            </Text>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+    };
 
     const renderCard = (loc: TmpLocation) => {
         const status = locStatuses[loc.label] || 'idle';
@@ -169,6 +302,15 @@ function TmpFilesAnalyse() {
                         <Space>
                             <Tag color={categoryColors[loc.category] || 'default'}>{loc.category}</Tag>
                             <span data-testid="card-label">{loc.label}</span>
+                            <Popover
+                                content={renderCleanupPopover(loc)}
+                                trigger="click"
+                                data-testid={`cleanup-popover-${loc.category}`}
+                            >
+                                <span data-testid="cleanup-indicator" style={{ cursor: 'pointer', color: '#1677ff' }}>
+                                    <QuestionCircleOutlined />
+                                </span>
+                            </Popover>
                             {status === 'pending' && (
                                 <span data-testid="pending-badge"><ClockCircleOutlined style={{ color: '#faad14' }} /></span>
                             )}
@@ -181,11 +323,16 @@ function TmpFilesAnalyse() {
                         </Space>
                     }
                     extra={
-                        loc.rebootSafe ? (
-                            <Tag data-testid="reboot-safe-badge" color="green">Reboot Safe</Tag>
-                        ) : (
-                            <Tag data-testid="reboot-safe-badge" color="default">Cleared on Reboot</Tag>
-                        )
+                        <Space size={4}>
+                            {loc.rebootSafe ? (
+                                <Tag data-testid="reboot-safe-badge" color="green">Reboot Safe</Tag>
+                            ) : (
+                                <Tag data-testid="reboot-safe-badge" color="default">Cleared on Reboot</Tag>
+                            )}
+                            {loc.rebootSafe && !loc.reclaimable && (
+                                <Tag data-testid="non-reclaimable-badge" color="orange">OS Managed</Tag>
+                            )}
+                        </Space>
                     }
                 >
                     <div style={{ fontSize: '20px', fontWeight: 'bold' }} data-testid="card-size">

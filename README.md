@@ -8,5 +8,6 @@ git clone https://github.com/xhd2015/disk-usage-analyser
 
 cd disk-usage-analyser
 
-go run ./ --dev
+# start dev mode
+go run ./script/dev
 ```

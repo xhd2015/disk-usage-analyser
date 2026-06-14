@@ -19,8 +19,10 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 
 	homeDir := req.HomeDir
 	absPathDirs := map[string]bool{
-		"/tmp": true,
-		"/usr/local/var/log/nginx": true,
+		"/tmp":                       true,
+		"/usr/local/var/log/nginx":   true,
+		"/private/var/vm/":           true,
+		"/var/vm/":                   true,
 	}
 
 	for _, loc := range resp.Locations {

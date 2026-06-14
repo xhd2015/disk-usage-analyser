@@ -37,6 +37,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		"ELEM card-temp":               "visible=true",
 		"ELEM card-cache":              "visible=true",
 		"ELEM card-log":                "visible=true",
+		"ELEM card-swap":              "visible=true",
 		"ELEM section-software":        "visible=true",
 		"ELEM card-go":                 "visible=true",
 		"ELEM card-npm":                "visible=true",

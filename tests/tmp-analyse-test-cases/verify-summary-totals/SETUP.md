@@ -18,10 +18,10 @@ import (
 
 func Run(t *testing.T, req *Request) (*Response, error) {
 	locations := []server.TmpLocation{
-		{Path: "/Users/x/.Trash", Label: "User Trash", Category: "trash", Size: 1000, FileCount: 5, RebootSafe: true},
-		{Path: "/Users/x/Library/Caches", Label: "User Caches", Category: "cache", Size: 500, FileCount: 10, RebootSafe: true},
-		{Path: "/tmp", Label: "System Temp", Category: "temp", Size: 2000, FileCount: 3, RebootSafe: false},
-		{Path: "/Users/x/Library/Logs", Label: "User Logs", Category: "log", Size: 300, FileCount: 8, RebootSafe: true},
+		{Path: "/Users/x/.Trash", Label: "User Trash", Category: "trash", Size: 1000, FileCount: 5, RebootSafe: true, Reclaimable: true},
+		{Path: "/Users/x/Library/Caches", Label: "User Caches", Category: "cache", Size: 500, FileCount: 10, RebootSafe: true, Reclaimable: true},
+		{Path: "/tmp", Label: "System Temp", Category: "temp", Size: 2000, FileCount: 3, RebootSafe: false, Reclaimable: false},
+		{Path: "/Users/x/Library/Logs", Label: "User Logs", Category: "log", Size: 300, FileCount: 8, RebootSafe: true, Reclaimable: true},
 	}
 	summary := server.BuildSummary(locations)
 	return &Response{

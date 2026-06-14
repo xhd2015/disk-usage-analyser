@@ -40,9 +40,10 @@ await check('[data-testid="card-trash"]', 'card-trash');
 await check('[data-testid="card-temp"]', 'card-temp');
 await check('[data-testid="card-cache"]', 'card-cache');
 await check('[data-testid="card-log"]', 'card-log');
+await check('[data-testid="card-swap"]', 'card-swap');
 
 // Card internals for core categories
-for (const cat of ['trash', 'temp', 'cache', 'log']) {
+for (const cat of ['trash', 'temp', 'cache', 'log', 'swap']) {
     await check(`[data-testid="card-${cat}"] [data-testid="card-label"]`, `card-${cat}-label`);
     await check(`[data-testid="card-${cat}"] [data-testid="card-size"]`, `card-${cat}-size`);
     await check(`[data-testid="card-${cat}"] [data-testid="reboot-safe-badge"]`, `card-${cat}-reboot-safe`);

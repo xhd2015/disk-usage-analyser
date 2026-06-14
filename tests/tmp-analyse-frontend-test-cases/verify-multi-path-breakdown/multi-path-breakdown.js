@@ -37,7 +37,7 @@ console.log(`FULL_PATH xcode-label-starts-with-tilde: ${xcodeLabelText.startsWit
 console.log(`FULL_PATH xcode-label-not-truncated: ${xcodeLabelText.split('/').length > 3}`);
 
 // Single-path tools should NOT have breakdown-items
-const singlePathCats = ['npm', 'bun', 'docker', 'gradle', 'maven'];
+const singlePathCats = ['bun', 'docker', 'gradle', 'maven'];
 for (const cat of singlePathCats) {
     const breakdownEl = await page.$(`[data-testid="card-${cat}"] [data-testid="breakdown-items"]`);
     if (breakdownEl) {

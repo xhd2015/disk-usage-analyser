@@ -24,12 +24,15 @@ tmp-analyse-test-cases/
 ├── verify-calculate-size/                # CalculateSize sums file sizes correctly
 ├── verify-empty-dir/                     # CalculateSize handles empty directories
 ├── verify-nested-dirs/                   # CalculateSize recursively sums nested dirs
-├── verify-summary-totals/                # BuildSummary computes total + reclaimable
+├── verify-summary-totals/                # BuildSummary computes total + reclaimable (using Reclaimable field)
 ├── verify-sse-format/                    # SSE handler emits all expected event types
 ├── verify-progress-stream/               # ScanWithProgress fires progress callbacks
 ├── verify-scan-with-partial-error/       # Error handling during scan
 ├── verify-totals-in-progress/            # BuildProgressPayload accumulates totals correctly
-└── verify-tilde-paths/                   # All home-relative paths use ~ prefix, not raw /Users/
+├── verify-tilde-paths/                   # All home-relative paths use ~ prefix, not raw /Users/
+├── verify-swap-location/                 # Swap at /private/var/vm/ with category="swap", rebootSafe=true
+├── verify-swap-not-reclaimable/          # Swap excluded from reclaimable total (Reclaimable=false)
+└── verify-npm-dynamic-breakdown/         # npm ~/.npm subdirs become dynamic breakdownItems on scan
 ```
 
 ## Test Cases
@@ -50,5 +53,8 @@ tmp-analyse-test-cases/
 14. verify-progress-stream — ScanWithProgress fires progress callbacks
 15. verify-scan-with-partial-error — Error handling during scan
 16. verify-totals-in-progress — BuildProgressPayload accumulates totals correctly
-17. verify-tilde-paths — All home-relative paths and ExtraPaths use ~ prefix; no raw home directory in any path
+17. verify-tilde-paths — All home-relative paths and ExtraPaths use ~ prefix; no raw home directory in any path; /private/var/vm/ accepted as absolute path
+18. verify-swap-location — Swap appears in DiscoverLocations at /private/var/vm/ with category="swap", label="Swap", rebootSafe=true, Reclaimable=false
+19. verify-swap-not-reclaimable — BuildSummary excludes swap from reclaimable total even though rebootSafe=true (Reclaimable field decoupled)
+20. verify-npm-dynamic-breakdown — npm ~/.npm subdirectories (_cacache, _logs, etc.) become dynamic breakdownItems during scan
 ```

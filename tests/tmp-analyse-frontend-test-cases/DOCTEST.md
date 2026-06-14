@@ -5,14 +5,14 @@ Run the tests:
 doctest test -v ./
 ```
 
-Feature: Tmp Files Analyse page — UI structure, navigation, scan interaction, stop behavior, and well-known software cache/log display.
+Feature: Tmp Files Analyse page — UI structure, navigation, scan interaction, stop behavior, cleanup suggestions, swap display, and well-known software cache/log display.
 
 ## Test Tree
 
 ```
 tmp-analyse-frontend-test-cases/
 ├── SETUP.md                              # Root: Request/Response + Run (calls playwright-debug)
-├── verify-page-renders/                  # Page has heading, buttons, summary, core/software sections, collapse
+├── verify-page-renders/                  # Page has heading, buttons, summary, core/software/swap sections, collapse
 │   ├── SETUP.md
 │   ├── page-renders.js
 │   └── ASSERT.md
@@ -24,7 +24,7 @@ tmp-analyse-frontend-test-cases/
 │   ├── SETUP.md
 │   ├── not-detected-collapse.js
 │   └── ASSERT.md
-├── verify-multi-path-breakdown/          # Go and Xcode cards show extra-path breakdown with full ~ paths and table rows
+├── verify-multi-path-breakdown/          # Go and Xcode cards show extra-path breakdown (npm now dynamic)
 │   ├── SETUP.md
 │   ├── multi-path-breakdown.js
 │   └── ASSERT.md
@@ -52,14 +52,42 @@ tmp-analyse-frontend-test-cases/
 │   ├── SETUP.md
 │   ├── location-path.js
 │   └── ASSERT.md
-└── verify-breakdown-table-layout/        # Breakdown entries use flexbox rows: path left, size right
+├── verify-breakdown-table-layout/        # Breakdown entries use flexbox rows: path left, size right
+│   ├── SETUP.md
+│   ├── breakdown-table-layout.js
+│   └── ASSERT.md
+├── verify-cleanup-indicators/            # Every card has a clickable cleanup indicator icon
+│   ├── SETUP.md
+│   ├── cleanup-indicators.js
+│   └── ASSERT.md
+├── verify-cleanup-popover-npm/           # npm card: click indicator shows npm cache clean suggestions
+│   ├── SETUP.md
+│   ├── cleanup-popover-npm.js
+│   └── ASSERT.md
+├── verify-cleanup-popover-go/            # Go card: click indicator shows go clean -cache suggestions
+│   ├── SETUP.md
+│   ├── cleanup-popover-go.js
+│   └── ASSERT.md
+├── verify-cleanup-popover-xcode/         # Xcode card: click shows simctl and DerivedData cleanup
+│   ├── SETUP.md
+│   ├── cleanup-popover-xcode.js
+│   └── ASSERT.md
+├── verify-swap-card/                     # Swap card appears in System Locations section
+│   ├── SETUP.md
+│   ├── swap-card.js
+│   └── ASSERT.md
+├── verify-swap-non-reclaimable/          # Swap card shows non-reclaimable indicator
+│   ├── SETUP.md
+│   ├── swap-non-reclaimable.js
+│   └── ASSERT.md
+└── verify-npm-breakdown/                 # npm card shows dynamic breakdown when subdirs exist
     ├── SETUP.md
-    ├── breakdown-table-layout.js
+    ├── npm-breakdown.js
     └── ASSERT.md
 
 ## Test Cases
 
-1. verify-page-renders — All expected DOM elements with data-testid exist, including core + software sections and collapse panel
+1. verify-page-renders — All expected DOM elements with data-testid exist, including core + software + swap sections and collapse panel
 2. verify-software-cards-render — Each of 17 software tools has a card with label, size, and reboot-safe badge
 3. verify-not-detected-collapse — Non-detected tools appear in a collapsed "Not Detected" panel
 4. verify-multi-path-breakdown — Go and Xcode cards show extra-path size breakdown with full ~ paths in table-like rows
@@ -73,6 +101,13 @@ tmp-analyse-frontend-test-cases/
 12. verify-totals-accumulate — Total/Reclaimable sizes accumulate during scan
 13. verify-location-path-shown — Path is displayed after scan completes, with ~ prefix
 14. verify-breakdown-table-layout — Breakdown entries use flexbox rows: path left, size right, justify-content:space-between
+15. verify-cleanup-indicators — Every card has a clickable cleanup indicator icon visible
+16. verify-cleanup-popover-npm — npm cleanup indicator click shows `npm cache clean --force` and `npm cache verify` with descriptions
+17. verify-cleanup-popover-go — Go cleanup indicator click shows `go clean -cache` and `go clean -modcache`
+18. verify-cleanup-popover-xcode — Xcode cleanup indicator click shows DerivedData removal and simctl simulator cleanup
+19. verify-swap-card — Swap card appears in System Locations section with label "Swap", category "swap"
+20. verify-swap-non-reclaimable — Swap card shows non-reclaimable badge indicating OS-managed
+21. verify-npm-breakdown — npm card dynamically shows breakdown items when ~/.npm has subdirectories
 
 ## Prerequisites
 

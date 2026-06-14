@@ -19,6 +19,7 @@ type TmpLocation struct {
 	Size           int64              `json:"size"`
 	FileCount      int64              `json:"fileCount"`
 	RebootSafe     bool               `json:"rebootSafe"`
+	Reclaimable    bool               `json:"reclaimable"`
 	Detected       bool               `json:"detected"`
 	ExtraPaths     []string           `json:"-"`
 	BreakdownItems []TmpBreakdownItem `json:"breakdownItems,omitempty"`
@@ -63,8 +64,8 @@ func DiscoverLocations(homeDir string) []TmpLocation {
 		{Path: filepath.Join(homeDir, ".Trash"), Label: "User Trash", Category: "trash", RebootSafe: true, Detected: true},
 		{Path: filepath.Join(homeDir, "Library", "Caches"), Label: "User Caches", Category: "cache", RebootSafe: true, Detected: true},
 		{Path: filepath.Join(homeDir, "Library", "Logs"), Label: "User Logs", Category: "log", RebootSafe: true, Detected: true},
+		{Path: "/private/var/vm/", Label: "Swap", Category: "swap", RebootSafe: true, Reclaimable: false, Detected: true},
 		{Path: "/tmp", Label: "System Temp", Category: "temp", RebootSafe: false, Detected: true},
-		{Path: "/tmp", Label: "System Tmp", Category: "temp", RebootSafe: false, Detected: true},
 	}
 
 	softwareLocations := []TmpLocation{
@@ -117,6 +118,12 @@ func DiscoverLocations(homeDir string) []TmpLocation {
 	}
 
 	all := append(coreLocations, softwareLocations...)
+	for i := range all {
+		all[i].Reclaimable = all[i].RebootSafe
+		if all[i].Category == "swap" {
+			all[i].Reclaimable = false
+		}
+	}
 	for i := range all {
 		all[i].Path = tildePath(homeDir, all[i].Path)
 		for j := range all[i].ExtraPaths {
@@ -178,7 +185,7 @@ func BuildSummary(locations []TmpLocation) TmpSummary {
 	var total, reclaimable int64
 	for _, loc := range locations {
 		total += loc.Size
-		if loc.RebootSafe {
+		if loc.Reclaimable {
 			reclaimable += loc.Size
 		}
 	}
@@ -189,10 +196,10 @@ func BuildSummary(locations []TmpLocation) TmpSummary {
 	}
 }
 
-func BuildProgressPayload(label string, curSize, curCount int64, accumulatedSize, accumulatedReclaimable int64, rebootSafe bool) map[string]interface{} {
+func BuildProgressPayload(label string, curSize, curCount int64, accumulatedSize, accumulatedReclaimable int64, reclaimable bool) map[string]interface{} {
 	totalSize := accumulatedSize + curSize
 	reclaimableSize := accumulatedReclaimable
-	if rebootSafe {
+	if reclaimable {
 		reclaimableSize += curSize
 	}
 	return map[string]interface{}{
@@ -257,36 +264,86 @@ func HandleTmpAnalyse(w http.ResponseWriter, r *http.Request) {
 		}
 
 		label := locations[i].Label
-		rebootSafe := locations[i].RebootSafe
+		reclaimable := locations[i].Reclaimable
 
 		var totalSize, totalCount int64
 
-		for bi := range locations[i].BreakdownItems {
-			scanPath := resolveTildePath(locations[i].BreakdownItems[bi].Path, homeDir)
-
-			fsys := os.DirFS(scanPath)
-			size, count, err := ScanWithProgress(fsys, ".", func(curSize int64, curCount int64) {
-				progress := BuildProgressPayload(label, curSize, curCount, accumulatedSize, accumulatedReclaimable, rebootSafe)
-				sendSSEEvent(w, "progress", progress)
-				flusher.Flush()
-			})
-			if err != nil {
-				log.Printf("Error scanning %s (%s): %v (got %d bytes, %d files)", label, scanPath, err, size, count)
-				size = 0
-				count = 0
+		if label == "npm" {
+			npmResolvedPath := resolveTildePath(locations[i].Path, homeDir)
+			entries, err := os.ReadDir(npmResolvedPath)
+			if err == nil && len(entries) > 0 {
+				var subItems []TmpBreakdownItem
+				for _, e := range entries {
+					if !e.IsDir() {
+						continue
+					}
+					subPath := filepath.Join(npmResolvedPath, e.Name())
+					fsys := os.DirFS(subPath)
+					size, count, err := ScanWithProgress(fsys, ".", func(curSize int64, curCount int64) {
+						progress := BuildProgressPayload(label, curSize, curCount, accumulatedSize, accumulatedReclaimable, reclaimable)
+						sendSSEEvent(w, "progress", progress)
+						flusher.Flush()
+					})
+					if err != nil {
+						log.Printf("Error scanning npm subdir %s (%s): %v", label, subPath, err)
+						size = 0
+						count = 0
+					}
+					totalSize += size
+					totalCount += count
+					subItems = append(subItems, TmpBreakdownItem{
+						Path:      tildePath(homeDir, subPath),
+						Size:      size,
+						FileCount: count,
+					})
+				}
+				locations[i].BreakdownItems = subItems
+			} else {
+				scanPath := resolveTildePath(locations[i].BreakdownItems[0].Path, homeDir)
+				fsys := os.DirFS(scanPath)
+				size, count, err := ScanWithProgress(fsys, ".", func(curSize int64, curCount int64) {
+					progress := BuildProgressPayload(label, curSize, curCount, accumulatedSize, accumulatedReclaimable, reclaimable)
+					sendSSEEvent(w, "progress", progress)
+					flusher.Flush()
+				})
+				if err != nil {
+					log.Printf("Error scanning %s (%s): %v (got %d bytes, %d files)", label, scanPath, err, size, count)
+					size = 0
+					count = 0
+				}
+				totalSize = size
+				totalCount = count
+				locations[i].BreakdownItems[0].Size = size
+				locations[i].BreakdownItems[0].FileCount = count
 			}
+		} else {
+			for bi := range locations[i].BreakdownItems {
+				scanPath := resolveTildePath(locations[i].BreakdownItems[bi].Path, homeDir)
 
-			locations[i].BreakdownItems[bi].Size = size
-			locations[i].BreakdownItems[bi].FileCount = count
-			totalSize += size
-			totalCount += count
+				fsys := os.DirFS(scanPath)
+				size, count, err := ScanWithProgress(fsys, ".", func(curSize int64, curCount int64) {
+					progress := BuildProgressPayload(label, curSize, curCount, accumulatedSize, accumulatedReclaimable, reclaimable)
+					sendSSEEvent(w, "progress", progress)
+					flusher.Flush()
+				})
+				if err != nil {
+					log.Printf("Error scanning %s (%s): %v (got %d bytes, %d files)", label, scanPath, err, size, count)
+					size = 0
+					count = 0
+				}
+
+				locations[i].BreakdownItems[bi].Size = size
+				locations[i].BreakdownItems[bi].FileCount = count
+				totalSize += size
+				totalCount += count
+			}
 		}
 
 		locations[i].Size = totalSize
 		locations[i].FileCount = totalCount
 
 		accumulatedSize += totalSize
-		if rebootSafe {
+		if reclaimable {
 			accumulatedReclaimable += totalSize
 		}
 
