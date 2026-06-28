@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: self-contained-server UI verification
+
+```
+# React page renders tmp-analyse cards and scan UI
+User -> /tmp-analyse -> playwright-debug checks data-testid elements
+```
+
 ## Preconditions
 - The test harness (root SETUP.md) starts its own server, not requiring an externally running server
 - The server is started in --dev mode, auto-starts Vite dev server if needed

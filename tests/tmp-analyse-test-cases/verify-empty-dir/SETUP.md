@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: CalculateSize handles empty directories
+
+```
+# handler discovers locations, scans paths, streams SSE
+Client -> HandleTmpAnalyse -> DiscoverLocations -> ScanWithProgress -> SSE events
+```
+
 ## Preconditions
 - An empty mock filesystem exists with no files
 
@@ -13,16 +22,9 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
+	req.Op = "empty-dir"
 	req.FS = fstest.MapFS{}
 	return nil
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
-	fsys := req.FS.(fs.FS)
-	size, count, err := server.CalculateSize(fsys, ".")
-	if err != nil {
-		return nil, err
-	}
-	return &Response{Size: size, FileCount: count}, nil
-}
 ```

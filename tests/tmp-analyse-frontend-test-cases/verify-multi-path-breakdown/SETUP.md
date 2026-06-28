@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: multi-path-breakdown UI verification
+
+```
+# React page renders tmp-analyse cards and scan UI
+User -> /tmp-analyse -> playwright-debug checks data-testid elements
+```
+
 ## Preconditions
 - The React app is compiled and served at `SERVER_URL`
 - Go and Xcode cards use unified breakdown-items to show sizes across their multiple scan paths

@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: swap-non-reclaimable UI verification
+
+```
+# React page renders tmp-analyse cards and scan UI
+User -> /tmp-analyse -> playwright-debug checks data-testid elements
+```
+
 ## Preconditions
 - The React app is compiled and served at `SERVER_URL`
 - The swap card displays a non-reclaimable indicator distinct from the reclaimable safe-to-delete badge

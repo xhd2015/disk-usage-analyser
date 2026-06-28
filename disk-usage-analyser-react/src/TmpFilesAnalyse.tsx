@@ -4,6 +4,26 @@ import { PlayCircleOutlined, StopOutlined, SyncOutlined, CheckCircleOutlined, Cl
 
 const { Text } = Typography;
 
+interface TmpRuntimeItem {
+    type: string;
+    totalCount: number;
+    activeCount: number;
+    size: number;
+    reclaimable?: number;
+}
+
+interface TmpVmStorageItem {
+    label: string;
+    path: string;
+    size: number;
+}
+
+interface TmpVmInternal {
+    items: TmpVmStorageItem[];
+    totalSize: number;
+    machineRunning: boolean;
+}
+
 interface TmpLocation {
     label: string;
     category: string;
@@ -13,6 +33,8 @@ interface TmpLocation {
     reclaimable: boolean;
     detected: boolean;
     breakdownItems?: { path: string; size: number; fileCount: number }[];
+    runtimeItems?: TmpRuntimeItem[];
+    vmInternal?: TmpVmInternal;
 }
 
 interface CleanupSuggestion {
@@ -72,7 +94,18 @@ const cleanupSuggestions: Record<string, CleanupSuggestion[]> = {
         { command: 'docker system prune -a', removes: 'Unused images, build cache, volumes', recoverable: 'Yes, re-pulled/rebuilt when needed' },
     ],
     podman: [
-        { command: 'podman system prune', removes: 'Unused images, build cache', recoverable: 'Yes, re-pulled/rebuilt when needed' },
+        { command: 'podman machine ssh', removes: 'Opens the Podman VM shell — run all commands below as user core, not root (root sees a separate empty store)', recoverable: 'No files removed' },
+        { command: 'podman system df -v', removes: 'Nothing (shows images, containers, volumes, and build cache usage)', recoverable: 'No files removed' },
+        { command: 'podman ps -a --size', removes: 'Nothing (lists containers with writable layer sizes)', recoverable: 'No files removed' },
+        { command: 'podman images', removes: 'Nothing (lists images, including dangling <none> build leftovers)', recoverable: 'No files removed' },
+        { command: 'du -sh ~/.local/share/containers/storage/overlay', removes: 'Nothing (raw overlay directory size on disk)', recoverable: 'No files removed' },
+        { command: 'podman image prune -f', removes: 'Dangling <none> images only', recoverable: 'Yes, re-pulled when needed' },
+        { command: 'podman container prune -f', removes: 'All stopped containers (running containers are kept)', recoverable: 'Yes, containers must be recreated if needed' },
+        { command: 'podman image prune -a -f', removes: 'All unused images (dangling + unused tagged builds)', recoverable: 'Yes, re-pulled when needed; images referenced by running containers are kept' },
+        { command: 'podman image prune -a --filter until=672h -f', removes: 'Unused images older than 4 weeks', recoverable: 'Yes, re-pulled when needed' },
+        { command: 'podman rmi <image_id>', removes: 'A specific image by ID or name', recoverable: 'Yes, re-pulled when needed; run podman rm <container_id> first if image is in use' },
+        { command: 'podman system prune -a -f --volumes', removes: 'Stopped containers, unused images, networks, and volumes', recoverable: 'Yes, re-pulled/rebuilt when needed' },
+        { command: 'podman system reset -f', removes: 'All Podman data for user core (containers, images, volumes, orphaned overlay dirs)', recoverable: 'No — must re-pull images and recreate containers; use when prune leaves huge overlay/ or metadata is corrupted' },
     ],
     nginx: [
         { command: 'rm -f /usr/local/var/log/nginx/*.log', removes: 'Nginx access and error logs', recoverable: 'Yes, log files auto-created on next access' },
@@ -191,11 +224,40 @@ function TmpFilesAnalyse() {
 
         es.addEventListener('progress', (e) => {
             const p = JSON.parse((e as MessageEvent).data);
-            setLocations(prev => prev.map(loc =>
-                loc.label === p.label
-                    ? { ...loc, size: p.size, fileCount: p.fileCount }
-                    : loc
-            ));
+            setLocations(prev => prev.map(loc => {
+                if (loc.label !== p.label) return loc;
+                const updated = { ...loc, size: p.size, fileCount: p.fileCount };
+                if (p.breakdownIndex !== undefined && loc.breakdownItems) {
+                    const items = [...loc.breakdownItems];
+                    if (p.breakdownPath) {
+                        const pathIdx = items.findIndex(item => item.path === p.breakdownPath);
+                        if (pathIdx >= 0) {
+                            items[pathIdx] = {
+                                ...items[pathIdx],
+                                size: p.breakdownSize,
+                                fileCount: p.breakdownFileCount,
+                            };
+                        } else {
+                            items.push({
+                                path: p.breakdownPath,
+                                size: p.breakdownSize,
+                                fileCount: p.breakdownFileCount,
+                            });
+                        }
+                    } else {
+                        const idx = p.breakdownIndex as number;
+                        if (idx < items.length) {
+                            items[idx] = {
+                                ...items[idx],
+                                size: p.breakdownSize,
+                                fileCount: p.breakdownFileCount,
+                            };
+                        }
+                    }
+                    updated.breakdownItems = items;
+                }
+                return updated;
+            }));
             setLocStatuses(prev => ({ ...prev, [p.label]: 'scanning' }));
             setTotalSize(p.totalSize);
             setReclaimableSize(p.reclaimableSize);
@@ -204,7 +266,9 @@ function TmpFilesAnalyse() {
         es.addEventListener('location', (e) => {
             const loc: TmpLocation = JSON.parse((e as MessageEvent).data);
             setLocations(prev => prev.map(p =>
-                p.label === loc.label ? { ...p, size: loc.size, fileCount: loc.fileCount, breakdownItems: loc.breakdownItems } : p
+                p.label === loc.label
+                    ? { ...p, size: loc.size, fileCount: loc.fileCount, breakdownItems: loc.breakdownItems, runtimeItems: loc.runtimeItems, vmInternal: loc.vmInternal }
+                    : p
             ));
             setLocStatuses(prev => ({ ...prev, [loc.label]: 'done' }));
         });
@@ -263,7 +327,7 @@ function TmpFilesAnalyse() {
         }
 
         return (
-            <div style={{ maxWidth: '400px' }}>
+            <div style={{ maxWidth: '400px', maxHeight: '500px', overflowY: 'auto' }}>
                 {suggestions.map((s, idx) => (
                     <div key={idx} data-testid={`cleanup-suggestion-${loc.category}-${idx}`} style={{ marginBottom: idx < suggestions.length - 1 ? '12px' : 0 }}>
                         <div>
@@ -338,6 +402,9 @@ function TmpFilesAnalyse() {
                     <div style={{ fontSize: '20px', fontWeight: 'bold' }} data-testid="card-size">
                         {formatBytes(loc.size)}
                     </div>
+                    {loc.category === 'podman' && (
+                        <Text type="secondary" style={{ fontSize: '11px', display: 'block' }}>On disk</Text>
+                    )}
                     <Text type="secondary" style={{ fontSize: '12px' }}>
                         {loc.fileCount > 0 ? `${loc.fileCount} files` : '--'}
                     </Text>
@@ -360,6 +427,41 @@ function TmpFilesAnalyse() {
                                 <Text data-testid="card-path" type="secondary" style={{ fontSize: '11px', fontFamily: 'monospace', wordBreak: 'break-all' }}>{loc.breakdownItems![0].path}</Text>
                             </div>
                         )
+                    )}
+                    {loc.vmInternal && loc.vmInternal.machineRunning && loc.vmInternal.items.length > 0 && (
+                        <div data-testid="vm-internal-section" style={{ marginTop: '8px', paddingLeft: '8px', borderLeft: '2px solid #d3adf7' }}>
+                            <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginBottom: '4px' }}>Inside VM</Text>
+                            {loc.vmInternal.items.map((item, idx) => (
+                                <div key={idx} data-testid={`vm-internal-row-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                    <Text data-testid={`vm-internal-label-${idx}`} type="secondary" style={{ fontSize: '11px' }}>
+                                        {item.label}
+                                    </Text>
+                                    <Text data-testid={`vm-internal-size-${idx}`} strong style={{ fontSize: '11px' }}>
+                                        {formatBytes(item.size)}
+                                    </Text>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {loc.runtimeItems && loc.runtimeItems.length > 0 && (
+                        <div data-testid="runtime-section" style={{ marginTop: '8px', paddingLeft: '8px', borderLeft: '2px solid #d9d9d9' }}>
+                            <Text type="secondary" style={{ fontSize: '11px', display: 'block', marginBottom: '4px' }}>Runtime</Text>
+                            {loc.runtimeItems.map((item, idx) => (
+                                <div key={idx} data-testid={`runtime-row-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                    <Text data-testid={`runtime-label-${idx}`} type="secondary" style={{ fontSize: '11px' }}>
+                                        {item.type}
+                                    </Text>
+                                    <Space size={4}>
+                                        <Text data-testid={`runtime-count-${idx}`} style={{ fontSize: '11px' }}>
+                                            {item.totalCount} {item.type === 'Images' ? 'images' : 'items'}
+                                        </Text>
+                                        <Text data-testid={`runtime-size-${idx}`} strong style={{ fontSize: '11px' }}>
+                                            {formatBytes(item.size)}
+                                        </Text>
+                                    </Space>
+                                </div>
+                            ))}
+                        </div>
                     )}
                 </Card>
             </Col>

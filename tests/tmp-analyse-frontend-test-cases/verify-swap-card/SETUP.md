@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: swap-card UI verification
+
+```
+# React page renders tmp-analyse cards and scan UI
+User -> /tmp-analyse -> playwright-debug checks data-testid elements
+```
+
 ## Preconditions
 - The React app is compiled and served at `SERVER_URL`
 - Swap appears as a system (core) location card in the System Locations section

@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: Go and Xcode have ExtraPaths; single-path tools have none
+
+```
+# handler discovers locations, scans paths, streams SSE
+Client -> HandleTmpAnalyse -> DiscoverLocations -> ScanWithProgress -> SSE events
+```
+
 ## Preconditions
 - Go and Xcode locations each span multiple directories on disk, requiring ExtraPaths
 - Other software locations scan only a single directory
@@ -22,38 +31,9 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
+	req.Op = "multi-path-locations"
 	req.HomeDir = "/Users/testuser"
 	return nil
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
-	locations := server.DiscoverLocations(req.HomeDir)
-	coreCategories := map[string]bool{"trash": true, "temp": true, "cache": true, "log": true}
-	var softwareLocs []server.TmpLocation
-	var goLoc, xcodeLoc *server.TmpLocation
-	for i, loc := range locations {
-		if !coreCategories[loc.Category] {
-			softwareLocs = append(softwareLocs, loc)
-			if loc.Category == "go" {
-				goLoc = &locations[i]
-			}
-			if loc.Category == "xcode" {
-				xcodeLoc = &locations[i]
-			}
-		}
-	}
-
-	extraPaths := []string{}
-	if goLoc != nil {
-		extraPaths = goLoc.ExtraPaths
-	}
-	if xcodeLoc != nil {
-		extraPaths = append(extraPaths, xcodeLoc.ExtraPaths...)
-	}
-
-	return &Response{
-		Locations:  softwareLocs,
-		ExtraPaths: extraPaths,
-	}, nil
-}
 ```

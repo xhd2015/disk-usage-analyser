@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: cleanup-popover-npm UI verification
+
+```
+# React page renders tmp-analyse cards and scan UI
+User -> /tmp-analyse -> playwright-debug checks data-testid elements
+```
+
 ## Preconditions
 - The React app is compiled and served at `SERVER_URL`
 - The npm card has a cleanup indicator that opens a popover with cleanup suggestions on click

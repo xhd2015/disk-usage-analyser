@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: software-cards-render UI verification
+
+```
+# React page renders tmp-analyse cards and scan UI
+User -> /tmp-analyse -> playwright-debug checks data-testid elements
+```
+
 ## Preconditions
 - The React app is compiled and served at `SERVER_URL`
 - The tmp-analyse page renders software-specific cards for detected tools

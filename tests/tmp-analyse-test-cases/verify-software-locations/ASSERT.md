@@ -1,5 +1,5 @@
 ## Expected
-- There are exactly 17 software locations
+- There are exactly 21 software locations
 - Each software location has RebootSafe=true
 - Each has a non-empty Path, Label, Category distinct from core categories
 - All home-relative paths use `~` prefix (e.g., `~/go/pkg/mod` instead of `/Users/testuser/go/pkg/mod`)
@@ -20,8 +20,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(resp.Locations) != 17 {
-		t.Fatalf("expected 17 software locations, got %d", len(resp.Locations))
+	if len(resp.Locations) != 21 {
+		t.Fatalf("expected 21 software locations, got %d", len(resp.Locations))
 	}
 
 	expectedMap := map[string]struct{
@@ -47,6 +47,10 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		"brew":     {"~/Library/Caches/Homebrew", "Homebrew", false, ""},
 		"xcode":    {"~/Library/Developer/Xcode/DerivedData", "Xcode", true, "~/Library/Developer/CoreSimulator/Devices"},
 		"composer": {"~/.composer/cache", "Composer", false, ""},
+		"opencode": {"~/.local/share/opencode/snapshot", "OpenCode", true, "~/.local/share/opencode/project"},
+		"claude":   {"~/.claude/plugins", "Claude Code", true, "~/.claude/telemetry"},
+		"codex":    {"~/.codex", "Codex (OpenAI)", true, "~/Library/Application Support/codex"},
+		"cursor":   {"~/Library/Application Support/Cursor", "Cursor", true, "~/Library/Application Support/Caches/cursor-updater"},
 	}
 
 	for cat, exp := range expectedMap {

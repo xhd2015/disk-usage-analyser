@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: Non-darwin handler sends unsupported_platform event
+
+```
+# handler discovers locations, scans paths, streams SSE
+Client -> HandleTmpAnalyse -> DiscoverLocations -> ScanWithProgress -> SSE events
+```
+
 ## Preconditions
 - The HandleTmpAnalyse handler checks runtime.GOOS before scanning
 - On non-darwin platforms the handler must not scan any directories
@@ -24,32 +33,9 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
+	req.Op = "unsupported-platform"
 	req.HomeDir = "/Users/testuser"
 	return nil
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
-	handler := http.HandlerFunc(server.HandleTmpAnalyse)
-	srv := httptest.NewServer(handler)
-	defer srv.Close()
-
-	httpReq, err := http.NewRequest("GET", srv.URL+"/api/tmp-analyse", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := http.DefaultClient.Do(httpReq)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	sseOutput := string(body)
-	return &Response{SSEOutput: sseOutput}, nil
-}
 ```

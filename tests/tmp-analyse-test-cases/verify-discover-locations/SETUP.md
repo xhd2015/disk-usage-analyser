@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: DiscoverLocations returns 22+ macOS paths with Detected flags
+
+```
+# handler discovers locations, scans paths, streams SSE
+Client -> HandleTmpAnalyse -> DiscoverLocations -> ScanWithProgress -> SSE events
+```
+
 ## Preconditions
 - A home directory path of "/Users/testuser" is provided
 
@@ -21,28 +30,9 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
+	req.Op = "discover-locations"
 	req.HomeDir = "/Users/testuser"
 	return nil
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
-	locations := server.DiscoverLocations(req.HomeDir)
-	categoryCount := make(map[string]int)
-	detectedCount := 0
-	notDetectedCount := 0
-	for _, loc := range locations {
-		categoryCount[loc.Category]++
-		if loc.Detected {
-			detectedCount++
-		} else {
-			notDetectedCount++
-		}
-	}
-	return &Response{
-		Locations:        locations,
-		CategoryCount:    categoryCount,
-		DetectedCount:    detectedCount,
-		NotDetectedCount: notDetectedCount,
-	}, nil
-}
 ```

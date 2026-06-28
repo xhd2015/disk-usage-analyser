@@ -1,119 +1,181 @@
 # Tmp Files Analyse — Frontend Test Cases
 
-Run the tests:
-```sh
-doctest test -v ./
-```
+UI tests for the tmp-analyse page: structure, navigation, scan interaction, breakdown
+display, runtime stats sections, and live breakdown progress during scans.
 
-Feature: Tmp Files Analyse page — UI structure, navigation, scan interaction, stop behavior, cleanup suggestions, swap display, and well-known software cache/log display.
+## Version
+
+0.0.2
+
+# DSN (Domain Specific Notion)
+
+The **React tmp-analyse page** loads location cards from the initial SSE **locations**
+event, then starts a scan via **Start Scan**. During scanning, **progress** SSE events
+update card header sizes and (for multi-path cards) individual **breakdown rows** live.
+When each location completes, a **location** event finalizes sizes and may attach
+**runtimeItems** for Docker/Podman, and **vmInternal** for Podman VM storage on macOS.
+The page renders cards with **data-testid** hooks for headings, summary bar, breakdown
+table rows, vm-internal section rows, runtime section rows, and scan badges.
+Tests drive the page through **playwright-debug** scripts against a locally started
+Go dev server.
 
 ## Test Tree
 
 ```
 tmp-analyse-frontend-test-cases/
-├── SETUP.md                              # Root: Request/Response + Run (calls playwright-debug)
-├── verify-page-renders/                  # Page has heading, buttons, summary, core/software/swap sections, collapse
-│   ├── SETUP.md
-│   ├── page-renders.js
-│   └── ASSERT.md
-├── verify-software-cards-render/         # Each software tool gets a card with label, size, reboot-safe badge
-│   ├── SETUP.md
-│   ├── software-cards-render.js
-│   └── ASSERT.md
-├── verify-not-detected-collapse/         # Non-detected tools grouped in collapsed "Not Detected" panel
-│   ├── SETUP.md
-│   ├── not-detected-collapse.js
-│   └── ASSERT.md
-├── verify-multi-path-breakdown/          # Go and Xcode cards show extra-path breakdown (npm now dynamic)
-│   ├── SETUP.md
-│   ├── multi-path-breakdown.js
-│   └── ASSERT.md
-├── verify-cards-from-locations-event/    # Cards populated from SSE "locations" event before scan
-│   ├── SETUP.md
-│   ├── cards-from-locations.js
-│   └── ASSERT.md
-├── verify-navigation/                    # Nav link exists, click navigates to /tmp-analyse
-│   ├── SETUP.md
-│   ├── navigation.js
-│   └── ASSERT.md
-├── verify-scan-starts/                   # Click start, SSE events fire, cards update
-│   ├── SETUP.md
-│   ├── scan-starts.js
-│   └── ASSERT.md
-├── verify-stop-scan/                     # Click stop, scan halts, button reverts
-│   ├── SETUP.md
-│   ├── stop-scan.js
-│   └── ASSERT.md
-├── verify-pending-status/                # Cards show pending state before scan
-├── verify-scan-progress/                 # Real-time size updates during scan
-├── verify-scanning-indicator/            # Spinning icon shows while scanning
-├── verify-totals-accumulate/             # Total/Reclaimable sizes accumulate during scan
-├── verify-location-path-shown/           # Path is displayed after scan completes, with ~ prefix
-│   ├── SETUP.md
-│   ├── location-path.js
-│   └── ASSERT.md
-├── verify-breakdown-table-layout/        # Breakdown entries use flexbox rows: path left, size right
-│   ├── SETUP.md
-│   ├── breakdown-table-layout.js
-│   └── ASSERT.md
-├── verify-cleanup-indicators/            # Every card has a clickable cleanup indicator icon
-│   ├── SETUP.md
-│   ├── cleanup-indicators.js
-│   └── ASSERT.md
-├── verify-cleanup-popover-npm/           # npm card: click indicator shows npm cache clean suggestions
-│   ├── SETUP.md
-│   ├── cleanup-popover-npm.js
-│   └── ASSERT.md
-├── verify-cleanup-popover-go/            # Go card: click indicator shows go clean -cache suggestions
-│   ├── SETUP.md
-│   ├── cleanup-popover-go.js
-│   └── ASSERT.md
-├── verify-cleanup-popover-xcode/         # Xcode card: click shows simctl and DerivedData cleanup
-│   ├── SETUP.md
-│   ├── cleanup-popover-xcode.js
-│   └── ASSERT.md
-├── verify-swap-card/                     # Swap card appears in System Locations section
-│   ├── SETUP.md
-│   ├── swap-card.js
-│   └── ASSERT.md
-├── verify-swap-non-reclaimable/          # Swap card shows non-reclaimable indicator
-│   ├── SETUP.md
-│   ├── swap-non-reclaimable.js
-│   └── ASSERT.md
-└── verify-npm-breakdown/                 # npm card shows dynamic breakdown when subdirs exist
-    ├── SETUP.md
-    ├── npm-breakdown.js
-    └── ASSERT.md
+├── [existing] verify-page-renders … verify-npm-breakdown
+├── breakdown-live-progress/
+│   └── go-multi-path/
+├── runtime-section/
+│   ├── docker-after-scan/
+│   └── podman-after-scan/
+└── podman-vm-internal/
+    └── after-scan/
+```
 
-## Test Cases
+## Test Index
 
-1. verify-page-renders — All expected DOM elements with data-testid exist, including core + software + swap sections and collapse panel
-2. verify-software-cards-render — Each of 17 software tools has a card with label, size, and reboot-safe badge
-3. verify-not-detected-collapse — Non-detected tools appear in a collapsed "Not Detected" panel
-4. verify-multi-path-breakdown — Go and Xcode cards show extra-path size breakdown with full ~ paths in table-like rows
-5. verify-cards-from-locations-event — All cards render from SSE "locations" event before scan button is clicked
-6. verify-navigation — Nav link "Tmp Files" present, click goes to /tmp-analyse, page renders
-7. verify-scan-starts — Click start triggers SSE events, card sizes update, button toggles
-8. verify-stop-scan — Click stop reverts button, SSE stream closes
-9. verify-pending-status — Cards show pending state before scan
-10. verify-scan-progress — Real-time size updates during scan
-11. verify-scanning-indicator — Spinning icon shows while scanning
-12. verify-totals-accumulate — Total/Reclaimable sizes accumulate during scan
-13. verify-location-path-shown — Path is displayed after scan completes, with ~ prefix
-14. verify-breakdown-table-layout — Breakdown entries use flexbox rows: path left, size right, justify-content:space-between
-15. verify-cleanup-indicators — Every card has a clickable cleanup indicator icon visible
-16. verify-cleanup-popover-npm — npm cleanup indicator click shows `npm cache clean --force` and `npm cache verify` with descriptions
-17. verify-cleanup-popover-go — Go cleanup indicator click shows `go clean -cache` and `go clean -modcache`
-18. verify-cleanup-popover-xcode — Xcode cleanup indicator click shows DerivedData removal and simctl simulator cleanup
-19. verify-swap-card — Swap card appears in System Locations section with label "Swap", category "swap"
-20. verify-swap-non-reclaimable — Swap card shows non-reclaimable badge indicating OS-managed
-21. verify-npm-breakdown — npm card dynamically shows breakdown items when ~/.npm has subdirectories
+| Leaf | Script |
+|------|--------|
+| verify-page-renders | page-renders.js |
+| verify-breakdown-live-progress/go-multi-path | breakdown-live-progress.js |
+| verify-runtime-section/docker-after-scan | docker-runtime-section.js |
+| verify-runtime-section/podman-after-scan | podman-runtime-section.js |
+| podman-vm-internal/after-scan | podman-vm-internal-section.js |
 
-## Prerequisites
-
-- Server must be running. Set `SERVER_URL` env var (default `http://localhost:8080`).
-- Start with: `go run . --dev` or `go run .`
+## How to Run
 
 ```sh
-SERVER_URL=http://localhost:8080 doctest test tests/tmp-analyse-frontend-test-cases/
+doctest vet ./tests/tmp-analyse-frontend-test-cases
+doctest test ./tests/tmp-analyse-frontend-test-cases
+```
+
+```go
+import (
+	"bufio"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"syscall"
+	"testing"
+	"time"
+)
+
+type Request struct {
+	ScriptFile string
+}
+
+type Response struct {
+	Output string
+	Passed bool
+}
+
+func Run(t *testing.T, req *Request) (*Response, error) {
+	script, err := os.ReadFile(req.ScriptFile)
+	if err != nil {
+		return nil, err
+	}
+
+	projectRoot, err := findProjectRoot()
+	if err != nil {
+		return nil, fmt.Errorf("failed to find project root: %v", err)
+	}
+
+	serverCmd := exec.Command("go", "run", ".", "--dev")
+	serverCmd.Dir = projectRoot
+	serverCmd.Env = append(os.Environ(), "NO_BROWSER=1")
+
+	stdout, err := serverCmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get stdout pipe: %v", err)
+	}
+
+	if err := serverCmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start server: %v", err)
+	}
+
+	defer func() {
+		serverCmd.Process.Signal(syscall.SIGTERM)
+		serverCmd.Wait()
+	}()
+
+	portCh := make(chan string, 1)
+	errCh := make(chan error, 1)
+
+	reader := bufio.NewReader(stdout)
+	go func() {
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err != io.EOF {
+					errCh <- err
+				}
+				return
+			}
+			if p, ok := parsePort(line); ok {
+				portCh <- p
+				return
+			}
+		}
+	}()
+
+	var port string
+	select {
+	case port = <-portCh:
+	case err := <-errCh:
+		serverCmd.Process.Signal(syscall.SIGTERM)
+		serverCmd.Wait()
+		return nil, fmt.Errorf("failed to read server output: %v", err)
+	case <-time.After(60 * time.Second):
+		serverCmd.Process.Signal(syscall.SIGTERM)
+		serverCmd.Wait()
+		return nil, fmt.Errorf("server did not start within 60 seconds")
+	}
+
+	go func() {
+		io.Copy(io.Discard, stdout)
+	}()
+
+	serverURL := fmt.Sprintf("http://localhost:%s", port)
+
+	cmd := exec.Command("playwright-debug", string(script))
+	cmd.Env = append(os.Environ(), "SERVER_URL="+serverURL, "NO_BROWSER=1")
+	out, runErr := cmd.CombinedOutput()
+
+	passed := cmd.ProcessState != nil && cmd.ProcessState.ExitCode() == 0
+
+	return &Response{
+		Output: string(out),
+		Passed: passed,
+	}, runErr
+}
+
+func findProjectRoot() (string, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("go.mod not found in any parent directory")
+		}
+		dir = parent
+	}
+}
+
+func parsePort(line string) (string, bool) {
+	prefix := "Serving directory preview at http://localhost:"
+	if !strings.HasPrefix(line, prefix) {
+		return "", false
+	}
+	rest := strings.TrimPrefix(line, prefix)
+	return strings.TrimSpace(rest), true
+}
 ```

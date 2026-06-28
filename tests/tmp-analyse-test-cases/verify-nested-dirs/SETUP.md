@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: CalculateSize recursively sums nested dirs
+
+```
+# handler discovers locations, scans paths, streams SSE
+Client -> HandleTmpAnalyse -> DiscoverLocations -> ScanWithProgress -> SSE events
+```
+
 ## Preconditions
 - A mock filesystem exists with deeply nested structure:
   - "a.txt" (10 bytes)
@@ -17,6 +26,7 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
+	req.Op = "nested-dirs"
 	req.FS = fstest.MapFS{
 		"a.txt":            &fstest.MapFile{Data: make([]byte, 10)},
 		"d1/b.txt":         &fstest.MapFile{Data: make([]byte, 20)},
@@ -26,12 +36,4 @@ func Setup(t *testing.T, req *Request) error {
 	return nil
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
-	fsys := req.FS.(fs.FS)
-	size, count, err := server.CalculateSize(fsys, ".")
-	if err != nil {
-		return nil, err
-	}
-	return &Response{Size: size, FileCount: count}, nil
-}
 ```

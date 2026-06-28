@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: totals-accumulate UI verification
+
+```
+# React page renders tmp-analyse cards and scan UI
+User -> /tmp-analyse -> playwright-debug checks data-testid elements
+```
+
 ## Preconditions
 - The Tmp Files Analyse page shows summary totals that accumulate during scan
 - MID_TOTAL is NOT "0 Bytes" (totals build up as files are scanned)

@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: breakdown-items-unified UI verification
+
+```
+# React page renders tmp-analyse cards and scan UI
+User -> /tmp-analyse -> playwright-debug checks data-testid elements
+```
+
 ## Preconditions
 - Backend uses `breakdownItems: [{path, size, fileCount}]` array, removing the primary/extra distinction
 - For 1-item locations: shows `card-path` centered (unchanged)

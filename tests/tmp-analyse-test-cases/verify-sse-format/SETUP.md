@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: SSE handler emits all expected event types
+
+```
+# handler discovers locations, scans paths, streams SSE
+Client -> HandleTmpAnalyse -> DiscoverLocations -> ScanWithProgress -> SSE events
+```
+
 ## Preconditions
 - An SSE handler is registered at /api/tmp-analyse
 - The handler streams location data as Server-Sent Events
@@ -24,31 +33,9 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
+	req.Op = "sse-format"
 	req.HomeDir = "/Users/testuser"
 	return nil
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
-	handler := http.HandlerFunc(server.HandleTmpAnalyse)
-	srv := httptest.NewServer(handler)
-	defer srv.Close()
-
-	httpReq, err := http.NewRequest("GET", srv.URL+"/api/tmp-analyse", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := http.DefaultClient.Do(httpReq)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Response{SSEOutput: string(body)}, nil
-}
 ```

@@ -13,7 +13,7 @@ import (
 )
 
 type TmpLocation struct {
-	Path           string             `json:"-"`
+	Path           string             `json:"path"`
 	Label          string             `json:"label"`
 	Category       string             `json:"category"`
 	Size           int64              `json:"size"`
@@ -23,6 +23,8 @@ type TmpLocation struct {
 	Detected       bool               `json:"detected"`
 	ExtraPaths     []string           `json:"-"`
 	BreakdownItems []TmpBreakdownItem `json:"breakdownItems,omitempty"`
+	RuntimeItems   []TmpRuntimeItem   `json:"runtimeItems,omitempty"`
+	VmInternal     *TmpVmInternal     `json:"vmInternal,omitempty"`
 }
 
 type TmpBreakdownItem struct {
@@ -211,6 +213,51 @@ func BuildProgressPayload(label string, curSize, curCount int64, accumulatedSize
 	}
 }
 
+func BuildBreakdownProgressPayload(
+	label string,
+	completedSizes []int64,
+	completedCounts []int64,
+	activeIndex int,
+	activeSize int64,
+	activeCount int64,
+	accumulatedSize int64,
+	accumulatedReclaimable int64,
+	reclaimable bool,
+	breakdownPath string,
+) map[string]interface{} {
+	var cardSize int64
+	var cardFileCount int64
+	for _, s := range completedSizes {
+		cardSize += s
+	}
+	for _, c := range completedCounts {
+		cardFileCount += c
+	}
+	cardSize += activeSize
+	cardFileCount += activeCount
+
+	totalSize := accumulatedSize + cardSize
+	reclaimableSize := accumulatedReclaimable
+	if reclaimable {
+		reclaimableSize += cardSize
+	}
+
+	payload := map[string]interface{}{
+		"label":              label,
+		"size":               cardSize,
+		"fileCount":          cardFileCount,
+		"breakdownIndex":     activeIndex,
+		"breakdownSize":      activeSize,
+		"breakdownFileCount": activeCount,
+		"totalSize":          totalSize,
+		"reclaimableSize":    reclaimableSize,
+	}
+	if breakdownPath != "" {
+		payload["breakdownPath"] = breakdownPath
+	}
+	return payload
+}
+
 func HandleTmpAnalyseLocations(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -273,14 +320,28 @@ func HandleTmpAnalyse(w http.ResponseWriter, r *http.Request) {
 			entries, err := os.ReadDir(npmResolvedPath)
 			if err == nil && len(entries) > 0 {
 				var subItems []TmpBreakdownItem
+				var completedSizes []int64
+				var completedCounts []int64
 				for _, e := range entries {
 					if !e.IsDir() {
 						continue
 					}
 					subPath := filepath.Join(npmResolvedPath, e.Name())
+					tildeSubPath := tildePath(homeDir, subPath)
 					fsys := os.DirFS(subPath)
 					size, count, err := ScanWithProgress(fsys, ".", func(curSize int64, curCount int64) {
-						progress := BuildProgressPayload(label, curSize, curCount, accumulatedSize, accumulatedReclaimable, reclaimable)
+						progress := BuildBreakdownProgressPayload(
+							label,
+							completedSizes,
+							completedCounts,
+							len(completedSizes),
+							curSize,
+							curCount,
+							accumulatedSize,
+							accumulatedReclaimable,
+							reclaimable,
+							tildeSubPath,
+						)
 						sendSSEEvent(w, "progress", progress)
 						flusher.Flush()
 					})
@@ -291,8 +352,10 @@ func HandleTmpAnalyse(w http.ResponseWriter, r *http.Request) {
 					}
 					totalSize += size
 					totalCount += count
+					completedSizes = append(completedSizes, size)
+					completedCounts = append(completedCounts, count)
 					subItems = append(subItems, TmpBreakdownItem{
-						Path:      tildePath(homeDir, subPath),
+						Path:      tildeSubPath,
 						Size:      size,
 						FileCount: count,
 					})
@@ -317,12 +380,31 @@ func HandleTmpAnalyse(w http.ResponseWriter, r *http.Request) {
 				locations[i].BreakdownItems[0].FileCount = count
 			}
 		} else {
+			useBreakdown := len(locations[i].BreakdownItems) >= 2
+			var completedSizes []int64
+			var completedCounts []int64
 			for bi := range locations[i].BreakdownItems {
 				scanPath := resolveTildePath(locations[i].BreakdownItems[bi].Path, homeDir)
 
 				fsys := os.DirFS(scanPath)
 				size, count, err := ScanWithProgress(fsys, ".", func(curSize int64, curCount int64) {
-					progress := BuildProgressPayload(label, curSize, curCount, accumulatedSize, accumulatedReclaimable, reclaimable)
+					var progress map[string]interface{}
+					if useBreakdown {
+						progress = BuildBreakdownProgressPayload(
+							label,
+							completedSizes,
+							completedCounts,
+							bi,
+							curSize,
+							curCount,
+							accumulatedSize,
+							accumulatedReclaimable,
+							reclaimable,
+							"",
+						)
+					} else {
+						progress = BuildProgressPayload(label, curSize, curCount, accumulatedSize, accumulatedReclaimable, reclaimable)
+					}
 					sendSSEEvent(w, "progress", progress)
 					flusher.Flush()
 				})
@@ -336,11 +418,29 @@ func HandleTmpAnalyse(w http.ResponseWriter, r *http.Request) {
 				locations[i].BreakdownItems[bi].FileCount = count
 				totalSize += size
 				totalCount += count
+				if useBreakdown {
+					completedSizes = append(completedSizes, size)
+					completedCounts = append(completedCounts, count)
+				}
 			}
 		}
 
 		locations[i].Size = totalSize
 		locations[i].FileCount = totalCount
+
+		switch locations[i].Category {
+		case "podman":
+			if vm, _ := CollectPodmanVmInternal(); vm != nil {
+				locations[i].VmInternal = vm
+			}
+			if items, _ := CollectPodmanRuntimeViaSSH(); len(items) > 0 {
+				locations[i].RuntimeItems = items
+			}
+		case "docker":
+			if items, _ := CollectRuntimeStats(locations[i].Category); len(items) > 0 {
+				locations[i].RuntimeItems = items
+			}
+		}
 
 		accumulatedSize += totalSize
 		if reclaimable {

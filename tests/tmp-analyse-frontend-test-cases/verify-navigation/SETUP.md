@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: navigation UI verification
+
+```
+# React page renders tmp-analyse cards and scan UI
+User -> /tmp-analyse -> playwright-debug checks data-testid elements
+```
+
 ## Preconditions
 - The React app is served at `SERVER_URL`
 - The home page has a navigation bar with links

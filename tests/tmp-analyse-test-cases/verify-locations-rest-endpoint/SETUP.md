@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: REST endpoint returns locations JSON without scanning
+
+```
+# handler discovers locations, scans paths, streams SSE
+Client -> HandleTmpAnalyse -> DiscoverLocations -> ScanWithProgress -> SSE events
+```
+
 ## Preconditions
 - A REST endpoint GET /api/tmp-analyse-locations is registered
 - The endpoint returns all discovered locations as a JSON array
@@ -26,51 +35,9 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
+	req.Op = "locations-rest-endpoint"
 	req.HomeDir = "/Users/testuser"
 	return nil
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
-	handler := http.HandlerFunc(server.HandleTmpAnalyseLocations)
-	srv := httptest.NewServer(handler)
-	defer srv.Close()
-
-	resp, err := http.Get(srv.URL + "/api/tmp-analyse-locations")
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	contentType := resp.Header.Get("Content-Type")
-
-	var locations []server.TmpLocation
-	if err := json.Unmarshal(body, &locations); err != nil {
-		return nil, err
-	}
-
-	categoryCount := make(map[string]int)
-	detectedCount := 0
-	notDetectedCount := 0
-	for _, loc := range locations {
-		categoryCount[loc.Category]++
-		if loc.Detected {
-			detectedCount++
-		} else {
-			notDetectedCount++
-		}
-	}
-
-	return &Response{
-		Locations:        locations,
-		CategoryCount:    categoryCount,
-		DetectedCount:    detectedCount,
-		NotDetectedCount: notDetectedCount,
-		SSEOutput:        contentType,
-	}, nil
-}
 ```

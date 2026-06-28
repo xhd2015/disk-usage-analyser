@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: Each software location has correct Path, Label, Category, ExtraPaths
+
+```
+# handler discovers locations, scans paths, streams SSE
+Client -> HandleTmpAnalyse -> DiscoverLocations -> ScanWithProgress -> SSE events
+```
+
 ## Preconditions
 - A home directory path of "/Users/testuser" is provided
 - 17 software cache/log locations are defined for macOS
@@ -23,19 +32,9 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
+	req.Op = "software-locations"
 	req.HomeDir = "/Users/testuser"
 	return nil
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
-	locations := server.DiscoverLocations(req.HomeDir)
-	coreCategories := map[string]bool{"trash": true, "temp": true, "cache": true, "log": true}
-	var softwareLocs []server.TmpLocation
-	for _, loc := range locations {
-		if !coreCategories[loc.Category] {
-			softwareLocs = append(softwareLocs, loc)
-		}
-	}
-	return &Response{Locations: softwareLocs}, nil
-}
 ```

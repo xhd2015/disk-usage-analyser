@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: page-renders UI verification
+
+```
+# React page renders tmp-analyse cards and scan UI
+User -> /tmp-analyse -> playwright-debug checks data-testid elements
+```
+
 ## Preconditions
 - The React app is compiled and served at `SERVER_URL`
 - No `/tmp-analyse` page exists yet, or a skeleton page exists

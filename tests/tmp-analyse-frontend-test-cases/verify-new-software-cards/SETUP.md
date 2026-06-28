@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: new-software-cards UI verification
+
+```
+# React page renders tmp-analyse cards and scan UI
+User -> /tmp-analyse -> playwright-debug checks data-testid elements
+```
+
 ## Preconditions
 - Four new software locations added: OpenCode, Claude Code, Codex (OpenAI), Cursor
 - Each has specific sub-path breakdowns (multi-path via breakdownItems)

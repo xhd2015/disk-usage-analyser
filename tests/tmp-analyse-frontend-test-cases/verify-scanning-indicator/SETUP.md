@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: scanning-indicator UI verification
+
+```
+# React page renders tmp-analyse cards and scan UI
+User -> /tmp-analyse -> playwright-debug checks data-testid elements
+```
+
 ## Preconditions
 - The Tmp Files Analyse page shows scanning indicators per card
 - `scanning-badge` appears while a location is being scanned

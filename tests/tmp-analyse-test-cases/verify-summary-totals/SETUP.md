@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: BuildSummary computes total + reclaimable
+
+```
+# handler discovers locations, scans paths, streams SSE
+Client -> HandleTmpAnalyse -> DiscoverLocations -> ScanWithProgress -> SSE events
+```
+
 ## Preconditions
 - Four pre-scanned TmpLocation entries are provided:
   - User Trash: size=1000, rebootSafe=true
@@ -12,21 +21,8 @@
 4. ReclaimableSize should be 1000+500+300 = 1800 (only rebootSafe=true items)
 
 ```go
-import (
-	"disk-usage-analyser/server"
-)
-
-func Run(t *testing.T, req *Request) (*Response, error) {
-	locations := []server.TmpLocation{
-		{Path: "/Users/x/.Trash", Label: "User Trash", Category: "trash", Size: 1000, FileCount: 5, RebootSafe: true, Reclaimable: true},
-		{Path: "/Users/x/Library/Caches", Label: "User Caches", Category: "cache", Size: 500, FileCount: 10, RebootSafe: true, Reclaimable: true},
-		{Path: "/tmp", Label: "System Temp", Category: "temp", Size: 2000, FileCount: 3, RebootSafe: false, Reclaimable: false},
-		{Path: "/Users/x/Library/Logs", Label: "User Logs", Category: "log", Size: 300, FileCount: 8, RebootSafe: true, Reclaimable: true},
-	}
-	summary := server.BuildSummary(locations)
-	return &Response{
-		TotalSize:       summary.TotalSize,
-		ReclaimableSize: summary.ReclaimableSize,
-	}, nil
+func Setup(t *testing.T, req *Request) error {
+	req.Op = "summary-totals"
+	return nil
 }
 ```

@@ -1,0 +1,2 @@
+du: cannot read directory '/home/core/.local/share/containers/storage/tmp': Permission denied
+1735229168	/home/core/.local/share/containers/storage

@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: Home-relative paths use ~ prefix
+
+```
+# handler discovers locations, scans paths, streams SSE
+Client -> HandleTmpAnalyse -> DiscoverLocations -> ScanWithProgress -> SSE events
+```
+
 ## Preconditions
 - DiscoverLocations should return tilde-shortened paths for all home-relative directories
 - Paths not under the home directory (e.g., /tmp, /usr/local) should remain absolute
@@ -13,12 +22,9 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
+	req.Op = "tilde-paths"
 	req.HomeDir = "/Users/testuser"
 	return nil
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
-	locations := server.DiscoverLocations(req.HomeDir)
-	return &Response{Locations: locations}, nil
-}
 ```

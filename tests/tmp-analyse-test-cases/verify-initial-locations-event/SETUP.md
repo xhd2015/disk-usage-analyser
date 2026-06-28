@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: First SSE event is locations with full array
+
+```
+# handler discovers locations, scans paths, streams SSE
+Client -> HandleTmpAnalyse -> DiscoverLocations -> ScanWithProgress -> SSE events
+```
+
 ## Preconditions
 - An SSE handler is registered at /api/tmp-analyse
 - Before any scanning begins, the handler sends a "locations" event listing all discovered locations
@@ -26,67 +35,9 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
+	req.Op = "initial-locations-event"
 	req.HomeDir = "/Users/testuser"
 	return nil
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
-	handler := http.HandlerFunc(server.HandleTmpAnalyse)
-	srv := httptest.NewServer(handler)
-	defer srv.Close()
-
-	httpReq, err := http.NewRequest("GET", srv.URL+"/api/tmp-analyse", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := http.DefaultClient.Do(httpReq)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	scanner := bufio.NewScanner(resp.Body)
-	var sseOutput strings.Builder
-	eventCount := 0
-	var firstEventType string
-	var firstEventData string
-
-	for scanner.Scan() && eventCount < 1 {
-		line := scanner.Text()
-		sseOutput.WriteString(line + "\n")
-		if strings.HasPrefix(line, "event: ") {
-			firstEventType = strings.TrimPrefix(line, "event: ")
-		}
-		if strings.HasPrefix(line, "data: ") {
-			firstEventData = strings.TrimPrefix(line, "data: ")
-			eventCount++
-		}
-	}
-
-	resp.Body.Close()
-
-	var locations []map[string]interface{}
-	if err := json.Unmarshal([]byte(firstEventData), &locations); err != nil {
-		return &Response{
-			SSEOutput: firstEventType + " | " + firstEventData,
-		}, nil
-	}
-
-	detectedCount := 0
-	notDetectedCount := 0
-	for _, loc := range locations {
-		if detected, ok := loc["detected"].(bool); ok && detected {
-			detectedCount++
-		} else {
-			notDetectedCount++
-		}
-	}
-
-	return &Response{
-		SSEOutput:        firstEventType,
-		DetectedCount:    detectedCount,
-		NotDetectedCount: notDetectedCount,
-	}, nil
-}
 ```

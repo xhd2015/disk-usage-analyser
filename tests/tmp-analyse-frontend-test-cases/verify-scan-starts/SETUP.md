@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: scan-starts UI verification
+
+```
+# React page renders tmp-analyse cards and scan UI
+User -> /tmp-analyse -> playwright-debug checks data-testid elements
+```
+
 ## Preconditions
 - The Tmp Files Analyse page is implemented and running
 - The backend SSE endpoint `/api/tmp-analyse` is functional (or will be in implementation phase)

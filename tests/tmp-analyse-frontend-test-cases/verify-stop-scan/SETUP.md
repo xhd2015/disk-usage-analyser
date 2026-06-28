@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: stop-scan UI verification
+
+```
+# React page renders tmp-analyse cards and scan UI
+User -> /tmp-analyse -> playwright-debug checks data-testid elements
+```
+
 ## Preconditions
 - The Tmp Files Analyse page is running with functional SSE backend
 - A scan can be started and stopped

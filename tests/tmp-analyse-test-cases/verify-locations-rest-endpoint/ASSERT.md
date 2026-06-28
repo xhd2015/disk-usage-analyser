@@ -1,7 +1,7 @@
 ## Expected
 - Response Content-Type contains "application/json" (not "text/event-stream")
 - Response body is valid JSON parsing to an array of TmpLocation objects
-- Array has at least 22 entries (5 core + 17 software)
+- Array has at least 26 entries (5 core + 21 software)
 - At least one trash, cache, log, temp category entry present
 - Software categories like go, npm, docker present
 - Each location has Detected field (boolean)
@@ -23,8 +23,8 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("expected Content-Type application/json, got: %s", resp.SSEOutput)
 	}
 
-	if len(resp.Locations) < 22 {
-		t.Fatalf("expected at least 22 locations, got %d", len(resp.Locations))
+	if len(resp.Locations) < 26 {
+		t.Fatalf("expected at least 26 locations, got %d", len(resp.Locations))
 	}
 
 	if resp.CategoryCount["trash"] == 0 {

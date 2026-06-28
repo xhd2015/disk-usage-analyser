@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: CalculateSize sums file sizes correctly
+
+```
+# handler discovers locations, scans paths, streams SSE
+Client -> HandleTmpAnalyse -> DiscoverLocations -> ScanWithProgress -> SSE events
+```
+
 ## Preconditions
 - A mock filesystem exists with three files: "a.txt" (100 bytes), "b.txt" (200 bytes), "sub/c.txt" (300 bytes)
 
@@ -13,6 +22,7 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
+	req.Op = "calculate-size"
 	req.FS = fstest.MapFS{
 		"a.txt":     &fstest.MapFile{Data: make([]byte, 100)},
 		"b.txt":     &fstest.MapFile{Data: make([]byte, 200)},
@@ -21,12 +31,4 @@ func Setup(t *testing.T, req *Request) error {
 	return nil
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
-	fsys := req.FS.(fs.FS)
-	size, count, err := server.CalculateSize(fsys, ".")
-	if err != nil {
-		return nil, err
-	}
-	return &Response{Size: size, FileCount: count}, nil
-}
 ```

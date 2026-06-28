@@ -1,0 +1,24 @@
+## Expected
+- "16.43 MB" parses to 16430000 bytes (decimal MB).
+
+## Side Effects
+- None (pure function or mock CLI).
+
+## Errors
+- See leaf scenario for expected error vs graceful-empty behavior.
+
+## Exit Code
+- Test passes when expectations match.
+
+```go
+import (
+	"testing"
+)
+
+func Assert(t *testing.T, req *Request, resp *Response, err error) {
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.ParsedBytes != 16430000 { t.Fatalf("expected 16430000 bytes, got %d", resp.ParsedBytes) }
+}
+```

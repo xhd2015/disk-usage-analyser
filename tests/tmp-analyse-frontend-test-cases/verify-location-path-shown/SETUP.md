@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: location-path-shown UI verification
+
+```
+# React page renders tmp-analyse cards and scan UI
+User -> /tmp-analyse -> playwright-debug checks data-testid elements
+```
+
 ## Preconditions
 - Each location card shows its actual file path after scan completes
 - Path element has data-testid="card-path" and contains a non-empty value

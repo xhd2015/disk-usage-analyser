@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: Swap at /private/var/vm/ with category swap
+
+```
+# handler discovers locations, scans paths, streams SSE
+Client -> HandleTmpAnalyse -> DiscoverLocations -> ScanWithProgress -> SSE events
+```
+
 ## Preconditions
 - DiscoverLocations includes swap at /private/var/vm/ as a core system location
 - Swap has category="swap", rebootSafe=true, and a field indicating it is not reclaimable
@@ -8,23 +17,8 @@
 3. Verify its properties
 
 ```go
-import (
-	"disk-usage-analyser/server"
-)
-
-func Run(t *testing.T, req *Request) (*Response, error) {
-	locations := server.DiscoverLocations(req.HomeDir)
-	resp := &Response{
-		Locations: locations,
-	}
-	for _, loc := range locations {
-		if loc.Category == "swap" {
-			resp.Size = loc.Size
-			resp.FileCount = loc.FileCount
-			resp.SSEOutput = loc.Label
-			break
-		}
-	}
-	return resp, nil
+func Setup(t *testing.T, req *Request) error {
+	req.Op = "swap-location"
+	return nil
 }
 ```

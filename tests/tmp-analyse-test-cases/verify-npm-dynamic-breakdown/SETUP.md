@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: npm subdirs become dynamic breakdownItems
+
+```
+# handler discovers locations, scans paths, streams SSE
+Client -> HandleTmpAnalyse -> DiscoverLocations -> ScanWithProgress -> SSE events
+```
+
 ## Preconditions
 - npm location under ~/.npm gets dynamic breakdown based on actual subdirectories
 - A mock filesystem is created with ~/.npm containing sub-directories _cacache and _logs
@@ -15,6 +24,7 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
+	req.Op = "npm-dynamic-breakdown"
 	tmpDir, err := os.MkdirTemp("", "doctest-npm-*")
 	if err != nil {
 		return err
@@ -35,24 +45,4 @@ func Setup(t *testing.T, req *Request) error {
 	return nil
 }
 
-func Run(t *testing.T, req *Request) (*Response, error) {
-	npmDir := filepath.Join(req.HomeDir, ".npm")
-
-	entries, err := os.ReadDir(npmDir)
-	if err != nil {
-		return nil, err
-	}
-
-	items := make([]string, 0, len(entries))
-	for _, e := range entries {
-		if e.IsDir() {
-			items = append(items, filepath.Join(npmDir, e.Name()))
-		}
-	}
-
-	return &Response{
-		ExtraPaths:    items,
-		DetectedCount: len(items),
-	}, nil
-}
 ```

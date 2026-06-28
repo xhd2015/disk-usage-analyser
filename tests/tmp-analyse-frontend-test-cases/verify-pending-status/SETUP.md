@@ -1,3 +1,12 @@
+# Scenario
+
+**Feature**: pending-status UI verification
+
+```
+# React page renders tmp-analyse cards and scan UI
+User -> /tmp-analyse -> playwright-debug checks data-testid elements
+```
+
 ## Preconditions
 - The Tmp Files Analyse page is running
 - When scan starts, all cards show `pending-badge` before receiving progress
