@@ -1,0 +1,13 @@
+{
+  "showUnder10M": false,
+  "worktreeRepos": [
+    {"repoPath": "/small-main", "repoName": "s", "size": 5242880, "sizeHuman": "5 MB", "fileCount": 1},
+    {"repoPath": "/big-main", "repoName": "b", "size": 20971520, "sizeHuman": "20 MB", "fileCount": 1}
+  ],
+  "linkedByRepo": {
+    "/big-main": [
+      {"repoPath": "/big-main", "repoName": "b", "path": "/big-main/wt-small", "head": "a", "isMain": false, "size": 3145728, "sizeHuman": "3 MB", "fileCount": 1},
+      {"repoPath": "/big-main", "repoName": "b", "path": "/big-main/wt-big", "head": "b", "isMain": false, "size": 12582912, "sizeHuman": "12 MB", "fileCount": 1}
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "worktreeRepos": [
+    {"repoPath": "/mid", "repoName": "m", "size": 10485760, "sizeHuman": "10 MB", "fileCount": 1},
+    {"repoPath": "/small", "repoName": "s", "size": 5242880, "sizeHuman": "5 MB", "fileCount": 1}
+  ],
+  "insert": {"repoPath": "/new-large", "repoName": "n", "size": 26214400, "sizeHuman": "25 MB", "fileCount": 1}
+}

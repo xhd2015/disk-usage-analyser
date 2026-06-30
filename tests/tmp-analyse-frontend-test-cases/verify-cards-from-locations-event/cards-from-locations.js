@@ -23,9 +23,7 @@ for (const cat of ['trash', 'temp', 'cache', 'log']) {
     await check(`[data-testid="card-${cat}"]`, cat);
 }
 
-// Count software cards present before scan
-const swCards = await page.$$('[data-testid^="card-"][data-testid!="card-trash"][data-testid!="card-temp"][data-testid!="card-cache"][data-testid!="card-log"]');
-// Actually, just count all cards
+// Count all cards present before scan
 await count('[data-testid^="card-"]', 'all-cards');
 
 // Count software cards specifically (non-core categories)

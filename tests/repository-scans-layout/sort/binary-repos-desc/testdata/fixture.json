@@ -1,0 +1,10 @@
+{
+  "binaryByRepo": {
+    "/small": [
+      {"path": "/small/bin", "size": 3145728, "sizeHuman": "3 MB", "kind": "go", "typeDesc": "", "repoPath": "/small", "repoName": "small"}
+    ],
+    "/large": [
+      {"path": "/large/bin", "size": 15728640, "sizeHuman": "15 MB", "kind": "go", "typeDesc": "", "repoPath": "/large", "repoName": "large"}
+    ]
+  }
+}

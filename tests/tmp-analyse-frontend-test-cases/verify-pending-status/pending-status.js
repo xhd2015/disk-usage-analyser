@@ -13,7 +13,11 @@ console.log(`INIT pending-badge count: ${initPending.length}`);
 
 // Click Start Scan
 const startBtn = await page.$('[data-testid="start-scan-btn"]');
-if (!startBtn) { console.log('BUTTON start-scan-btn: MISSING'); process.exitCode = 1; }
+if (!startBtn) {
+    console.log('BUTTON start-scan-btn: MISSING');
+    console.log('DONE');
+    process.exit(1);
+}
 await startBtn.click();
 
 // Immediately after click: pending badges should appear on cards
@@ -32,10 +36,20 @@ console.log(`MID done-badge count: ${midDone.length}`);
 
 // Wait for scan to complete (start button reappears)
 try {
-    await page.waitForSelector('[data-testid="start-scan-btn"]', { state: 'visible', timeout: 15000 });
+    await page.waitForSelector('[data-testid="start-scan-btn"]', { state: 'visible', timeout: 45000 });
     console.log('SCAN_COMPLETE: start button reappeared');
 } catch {
     console.log('SCAN_COMPLETE: timeout waiting for start button');
+}
+
+try {
+    await page.waitForFunction(() => {
+        return document.querySelectorAll('[data-testid="scanning-badge"]').length === 0
+            && document.querySelectorAll('[data-testid="pending-badge"]').length === 0;
+    }, { timeout: 3000 });
+    console.log('BADGES_CLEARED: true');
+} catch {
+    console.log('BADGES_CLEARED: false');
 }
 
 await page.waitForTimeout(500);

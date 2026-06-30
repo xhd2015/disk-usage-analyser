@@ -29,7 +29,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatal("expected HAS_DONE_BADGES: true after scan")
 	}
 	if !strings.Contains(resp.Output, "FINAL scanning-badge count: 0") {
-		t.Fatal("expected FINAL scanning-badge count: 0")
+		t.Fatalf("expected FINAL scanning-badge count: 0\nOutput:\n%s", resp.Output)
 	}
 	if !strings.Contains(resp.Output, "FINAL pending-badge count: 0") {
 		t.Fatal("expected FINAL pending-badge count: 0")

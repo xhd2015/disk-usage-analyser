@@ -1,6 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
-import { Button, Card, Space, Typography, Row, Col, Tag, Collapse, Alert, Popover } from 'antd';
+import { Button, Card, Space, Typography, Row, Col, Tag, Collapse, Alert, Popover, Modal, Checkbox } from 'antd';
 import { PlayCircleOutlined, StopOutlined, SyncOutlined, CheckCircleOutlined, ClockCircleOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import {
+    filterBinaryRepos,
+    filterWorktreeRepos,
+    sortBinaryRepos,
+    sortLinkedWorktrees,
+    sortWorktreeRepos,
+} from './repositoryScansLayout';
 
 const { Text } = Typography;
 
@@ -170,14 +177,65 @@ const categoryColors: Record<string, string> = {
 
 type LocStatus = 'idle' | 'pending' | 'scanning' | 'done';
 
+interface WorktreeRepoRow {
+    repoPath: string;
+    repoName: string;
+    size: number;
+    sizeHuman: string;
+    fileCount: number;
+}
+
+interface WorktreeHit {
+    repoPath: string;
+    repoName: string;
+    path: string;
+    head: string;
+    isMain: boolean;
+    size: number;
+    sizeHuman: string;
+    fileCount: number;
+}
+
+interface BinaryHit {
+    path: string;
+    size: number;
+    sizeHuman: string;
+    kind: string;
+    typeDesc: string;
+    repoPath: string;
+    repoName: string;
+}
+
+function testIdKey(value: string): string {
+    return value.replace(/[^a-zA-Z0-9._-]/g, '_');
+}
+
 function TmpFilesAnalyse() {
     const [scanning, setScanning] = useState(false);
     const [locations, setLocations] = useState<TmpLocation[]>([]);
     const [locStatuses, setLocStatuses] = useState<Record<string, LocStatus>>({});
     const eventSourceRef = useRef<EventSource | null>(null);
+    const mainScanActiveRef = useRef(false);
     const [totalSize, setTotalSize] = useState(0);
     const [reclaimableSize, setReclaimableSize] = useState(0);
     const [platformError, setPlatformError] = useState<string | null>(null);
+
+    const [worktreesScanning, setWorktreesScanning] = useState(false);
+    const [worktreesDone, setWorktreesDone] = useState(false);
+    const [worktreeRepos, setWorktreeRepos] = useState<WorktreeRepoRow[]>([]);
+    const [worktreeHits, setWorktreeHits] = useState<WorktreeHit[]>([]);
+    const worktreesESRef = useRef<EventSource | null>(null);
+
+    const [binariesScanning, setBinariesScanning] = useState(false);
+    const [binariesDone, setBinariesDone] = useState(false);
+    const [binaryHits, setBinaryHits] = useState<BinaryHit[]>([]);
+    const [showBinaryUnder1M, setShowBinaryUnder1M] = useState(false);
+    const [showWorktreeUnder10M, setShowWorktreeUnder10M] = useState(false);
+    const [selectedBinaryPaths, setSelectedBinaryPaths] = useState<Set<string>>(new Set());
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [deleteSuccess, setDeleteSuccess] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const binariesESRef = useRef<EventSource | null>(null);
 
     useEffect(() => {
         fetch('/api/tmp-analyse-locations')
@@ -191,9 +249,22 @@ function TmpFilesAnalyse() {
             .catch(err => console.error('Failed to fetch locations:', err));
     }, []);
 
+    const finalizeMainScanStatuses = () => {
+        setLocStatuses(prev => {
+            const next = { ...prev };
+            for (const label of Object.keys(next)) {
+                if (next[label] === 'pending' || next[label] === 'scanning') {
+                    next[label] = 'done';
+                }
+            }
+            return next;
+        });
+    };
+
     const startScan = () => {
         setScanning(true);
         setPlatformError(null);
+        mainScanActiveRef.current = true;
 
         const pending: Record<string, LocStatus> = {};
         locations.forEach(l => { pending[l.label] = 'pending'; });
@@ -217,12 +288,14 @@ function TmpFilesAnalyse() {
         es.addEventListener('unsupported_platform', (e) => {
             const d = JSON.parse((e as MessageEvent).data);
             setPlatformError(`This feature is only supported on macOS. Current OS: ${d.os}`);
+            mainScanActiveRef.current = false;
             es.close();
             eventSourceRef.current = null;
             setScanning(false);
         });
 
         es.addEventListener('progress', (e) => {
+            if (!mainScanActiveRef.current) return;
             const p = JSON.parse((e as MessageEvent).data);
             setLocations(prev => prev.map(loc => {
                 if (loc.label !== p.label) return loc;
@@ -258,50 +331,248 @@ function TmpFilesAnalyse() {
                 }
                 return updated;
             }));
-            setLocStatuses(prev => ({ ...prev, [p.label]: 'scanning' }));
+            setLocStatuses(prev => {
+                if (!mainScanActiveRef.current) return prev;
+                return { ...prev, [p.label]: 'scanning' };
+            });
             setTotalSize(p.totalSize);
             setReclaimableSize(p.reclaimableSize);
         });
 
         es.addEventListener('location', (e) => {
+            if (!mainScanActiveRef.current) return;
             const loc: TmpLocation = JSON.parse((e as MessageEvent).data);
             setLocations(prev => prev.map(p =>
                 p.label === loc.label
                     ? { ...p, size: loc.size, fileCount: loc.fileCount, breakdownItems: loc.breakdownItems, runtimeItems: loc.runtimeItems, vmInternal: loc.vmInternal }
                     : p
             ));
-            setLocStatuses(prev => ({ ...prev, [loc.label]: 'done' }));
+            setLocStatuses(prev => {
+                if (!mainScanActiveRef.current) return prev;
+                return { ...prev, [loc.label]: 'done' };
+            });
         });
 
         es.addEventListener('done', () => {
+            mainScanActiveRef.current = false;
             es.close();
             eventSourceRef.current = null;
             setScanning(false);
+            finalizeMainScanStatuses();
         });
 
         es.addEventListener('server_error', (e) => {
             const d = JSON.parse((e as MessageEvent).data);
             console.error('SSE error:', d.error);
+            mainScanActiveRef.current = false;
             es.close();
             eventSourceRef.current = null;
             setScanning(false);
+            finalizeMainScanStatuses();
         });
 
         es.onerror = () => {
             if (es.readyState === EventSource.CLOSED) return;
+            mainScanActiveRef.current = false;
             es.close();
             eventSourceRef.current = null;
             setScanning(false);
+            finalizeMainScanStatuses();
         };
     };
 
     const stopScan = () => {
+        mainScanActiveRef.current = false;
         if (eventSourceRef.current) {
             eventSourceRef.current.close();
             eventSourceRef.current = null;
         }
         setScanning(false);
     };
+
+    const startWorktreesScan = () => {
+        if (worktreesESRef.current) {
+            worktreesESRef.current.close();
+            worktreesESRef.current = null;
+        }
+        setWorktreesScanning(true);
+        setWorktreesDone(false);
+        setWorktreeRepos([]);
+        setWorktreeHits([]);
+
+        const es = new EventSource('/api/tmp-worktrees-scan');
+        worktreesESRef.current = es;
+
+        es.addEventListener('repo', (e) => {
+            const row: WorktreeRepoRow = JSON.parse((e as MessageEvent).data);
+            setWorktreeRepos(prev => [...prev, row]);
+        });
+
+        es.addEventListener('worktree', (e) => {
+            const hit: WorktreeHit = JSON.parse((e as MessageEvent).data);
+            setWorktreeHits(prev => [...prev, hit]);
+        });
+
+        es.addEventListener('done', () => {
+            es.close();
+            worktreesESRef.current = null;
+            setWorktreesScanning(false);
+            setWorktreesDone(true);
+        });
+
+        es.addEventListener('server_error', (e) => {
+            console.error('Worktrees SSE error:', JSON.parse((e as MessageEvent).data));
+            es.close();
+            worktreesESRef.current = null;
+            setWorktreesScanning(false);
+        });
+
+        es.onerror = () => {
+            if (es.readyState === EventSource.CLOSED) return;
+            es.close();
+            worktreesESRef.current = null;
+            setWorktreesScanning(false);
+        };
+    };
+
+    const stopWorktreesScan = () => {
+        if (worktreesESRef.current) {
+            worktreesESRef.current.close();
+            worktreesESRef.current = null;
+        }
+        setWorktreesScanning(false);
+    };
+
+    const startBinariesScan = () => {
+        if (binariesESRef.current) {
+            binariesESRef.current.close();
+            binariesESRef.current = null;
+        }
+        setBinariesScanning(true);
+        setBinariesDone(false);
+        setBinaryHits([]);
+        setSelectedBinaryPaths(new Set());
+        setDeleteSuccess(false);
+
+        const es = new EventSource('/api/tmp-binaries-scan');
+        binariesESRef.current = es;
+
+        es.addEventListener('binary', (e) => {
+            const hit: BinaryHit = JSON.parse((e as MessageEvent).data);
+            setBinaryHits(prev => [...prev, hit]);
+        });
+
+        es.addEventListener('done', () => {
+            es.close();
+            binariesESRef.current = null;
+            setBinariesScanning(false);
+            setBinariesDone(true);
+        });
+
+        es.addEventListener('server_error', (e) => {
+            console.error('Binaries SSE error:', JSON.parse((e as MessageEvent).data));
+            es.close();
+            binariesESRef.current = null;
+            setBinariesScanning(false);
+        });
+
+        es.onerror = () => {
+            if (es.readyState === EventSource.CLOSED) return;
+            es.close();
+            binariesESRef.current = null;
+            setBinariesScanning(false);
+        };
+    };
+
+    const stopBinariesScan = () => {
+        if (binariesESRef.current) {
+            binariesESRef.current.close();
+            binariesESRef.current = null;
+        }
+        setBinariesScanning(false);
+    };
+
+    const selectedBinaryTotal = binaryHits
+        .filter(hit => selectedBinaryPaths.has(hit.path))
+        .reduce((sum, hit) => sum + hit.size, 0);
+
+    const toggleBinaryPath = (path: string, checked: boolean) => {
+        setSelectedBinaryPaths(prev => {
+            const next = new Set(prev);
+            if (checked) {
+                next.add(path);
+            } else {
+                next.delete(path);
+            }
+            return next;
+        });
+    };
+
+    const toggleRepoBinaries = (repoPath: string, checked: boolean) => {
+        const paths = binaryHits.filter(hit => hit.repoPath === repoPath).map(hit => hit.path);
+        setSelectedBinaryPaths(prev => {
+            const next = new Set(prev);
+            for (const path of paths) {
+                if (checked) {
+                    next.add(path);
+                } else {
+                    next.delete(path);
+                }
+            }
+            return next;
+        });
+    };
+
+    const confirmDeleteBinaries = async () => {
+        setDeleting(true);
+        try {
+            const res = await fetch('/api/tmp-binaries-delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paths: Array.from(selectedBinaryPaths) }),
+            });
+            const result = await res.json();
+            const deletedSet = new Set<string>(result.deleted || []);
+            setBinaryHits(prev => prev.filter(hit => !deletedSet.has(hit.path)));
+            setSelectedBinaryPaths(new Set());
+            setDeleteSuccess(true);
+            setDeleteModalOpen(false);
+        } catch (err) {
+            console.error('Delete failed:', err);
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    const linkedWorktreesByRepoRaw = (() => {
+        const byRepo = new Map<string, WorktreeHit[]>();
+        for (const hit of worktreeHits) {
+            const list = byRepo.get(hit.repoPath) || [];
+            list.push(hit);
+            byRepo.set(hit.repoPath, list);
+        }
+        return byRepo;
+    })();
+
+    const binariesByRepoRaw = (() => {
+        const byRepo = new Map<string, BinaryHit[]>();
+        for (const hit of binaryHits) {
+            const list = byRepo.get(hit.repoPath) || [];
+            list.push(hit);
+            byRepo.set(hit.repoPath, list);
+        }
+        return byRepo;
+    })();
+
+    const { repos: filteredWorktreeRepos, linkedByRepo: filteredLinkedWorktreesByRepo } = filterWorktreeRepos(
+        worktreeRepos,
+        linkedWorktreesByRepoRaw,
+        showWorktreeUnder10M,
+    );
+    const visibleWorktreeRepos = sortWorktreeRepos(filteredWorktreeRepos);
+
+    const filteredBinariesByRepo = filterBinaryRepos(binariesByRepoRaw, showBinaryUnder1M);
+    const visibleBinaryRepos = sortBinaryRepos(filteredBinariesByRepo);
 
     const coreCategories = new Set(['trash', 'temp', 'cache', 'log', 'swap']);
     const coreLocations = locations.filter(l => coreCategories.has(l.category));
@@ -311,7 +582,7 @@ function TmpFilesAnalyse() {
     const renderCleanupPopover = (loc: TmpLocation) => {
         if (loc.category === 'swap') {
             return (
-                <div style={{ maxWidth: '300px' }}>
+                <div data-testid={`cleanup-popover-${loc.category}`} style={{ maxWidth: '300px' }}>
                     <Text>Cannot be reclaimed -- managed by macOS</Text>
                 </div>
             );
@@ -320,14 +591,14 @@ function TmpFilesAnalyse() {
         const suggestions = cleanupSuggestions[loc.category];
         if (!suggestions || suggestions.length === 0) {
             return (
-                <div style={{ maxWidth: '300px' }}>
+                <div data-testid={`cleanup-popover-${loc.category}`} style={{ maxWidth: '300px' }}>
                     <Text type="secondary">No standard cleanup commands available. Consider manual removal of the listed paths.</Text>
                 </div>
             );
         }
 
         return (
-            <div style={{ maxWidth: '400px', maxHeight: '500px', overflowY: 'auto' }}>
+            <div data-testid={`cleanup-popover-${loc.category}`} style={{ maxWidth: '400px', maxHeight: '500px', overflowY: 'auto' }}>
                 {suggestions.map((s, idx) => (
                     <div key={idx} data-testid={`cleanup-suggestion-${loc.category}-${idx}`} style={{ marginBottom: idx < suggestions.length - 1 ? '12px' : 0 }}>
                         <div>
@@ -369,7 +640,6 @@ function TmpFilesAnalyse() {
                             <Popover
                                 content={renderCleanupPopover(loc)}
                                 trigger="click"
-                                data-testid={`cleanup-popover-${loc.category}`}
                             >
                                 <span data-testid="cleanup-indicator" style={{ cursor: 'pointer', color: '#1677ff' }}>
                                     <QuestionCircleOutlined />
@@ -559,6 +829,225 @@ function TmpFilesAnalyse() {
                     }]}
                 />
             )}
+
+            <h2 data-testid="section-repository-scans-heading" style={{ fontSize: '16px', marginTop: '24px', marginBottom: '12px' }}>
+                Repository Scans
+            </h2>
+
+            <Card data-testid="worktrees-section" size="small" style={{ marginBottom: '16px' }}
+                title={
+                    <Space>
+                        <span>Git Worktrees</span>
+                        {worktreesScanning && (
+                            <span data-testid="worktrees-scanning-badge"><SyncOutlined spin style={{ color: '#1677ff' }} /></span>
+                        )}
+                        {worktreesDone && !worktreesScanning && (
+                            <span data-testid="worktrees-done-badge"><CheckCircleOutlined style={{ color: '#52c41a' }} /></span>
+                        )}
+                    </Space>
+                }
+                extra={
+                    <Space>
+                        <Checkbox
+                            data-testid="worktree-show-under-10m"
+                            checked={showWorktreeUnder10M}
+                            onChange={e => setShowWorktreeUnder10M(e.target.checked)}
+                        >
+                            &lt;10M
+                        </Checkbox>
+                        <Button
+                            data-testid="worktrees-scan-btn"
+                            size="small"
+                            type="primary"
+                            icon={<PlayCircleOutlined />}
+                            onClick={startWorktreesScan}
+                            style={{ display: worktreesScanning ? 'none' : undefined }}
+                        >
+                            Scan
+                        </Button>
+                        <Button
+                            data-testid="worktrees-stop-btn"
+                            size="small"
+                            danger
+                            icon={<StopOutlined />}
+                            onClick={stopWorktreesScan}
+                            disabled={!worktreesScanning}
+                        >
+                            Stop
+                        </Button>
+                    </Space>
+                }
+            >
+                {visibleWorktreeRepos.length > 0 || worktreesScanning || worktreesDone ? (
+                    <div data-testid="worktrees-tree" style={{ width: '100%', textAlign: 'left' }}>
+                        {visibleWorktreeRepos.map(repo => {
+                            const repoKey = testIdKey(repo.repoPath);
+                            const linkedHits = sortLinkedWorktrees(filteredLinkedWorktreesByRepo.get(repo.repoPath) || []);
+                            return (
+                                <div key={repo.repoPath} style={{ marginBottom: '8px', textAlign: 'left' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                        <span data-testid={`worktree-repo-row-${repoKey}`}>{repo.repoPath}</span>
+                                        <Text strong data-testid={`worktree-repo-size-${repoKey}`}>{repo.sizeHuman || formatBytes(repo.size)}</Text>
+                                    </div>
+                                    {linkedHits.length > 0 && (
+                                        <div style={{ paddingLeft: '16px', textAlign: 'left' }}>
+                                            {linkedHits.map(hit => {
+                                                const rowKey = testIdKey(hit.path);
+                                                return (
+                                                    <div key={hit.path} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: 8 }}>
+                                                        <span data-testid={`worktree-row-${rowKey}`}>{hit.path}</span>
+                                                        <Text strong data-testid={`worktree-row-size-${rowKey}`}>{hit.sizeHuman || formatBytes(hit.size)}</Text>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <Text type="secondary">Click Scan to discover git worktrees under ~</Text>
+                )}
+            </Card>
+
+            <Card data-testid="binaries-section" size="small" style={{ marginBottom: '16px' }}
+                title={
+                    <Space>
+                        <span>Binary files</span>
+                        {binariesScanning && (
+                            <span data-testid="binaries-scanning-badge"><SyncOutlined spin style={{ color: '#1677ff' }} /></span>
+                        )}
+                        {binariesDone && !binariesScanning && (
+                            <span data-testid="binaries-done-badge"><CheckCircleOutlined style={{ color: '#52c41a' }} /></span>
+                        )}
+                    </Space>
+                }
+                extra={
+                    <Space>
+                        <Checkbox
+                            data-testid="binary-show-under-1m"
+                            checked={showBinaryUnder1M}
+                            onChange={e => setShowBinaryUnder1M(e.target.checked)}
+                        >
+                            &lt;1M
+                        </Checkbox>
+                        <Button
+                            data-testid="binaries-scan-btn"
+                            size="small"
+                            type="primary"
+                            icon={<PlayCircleOutlined />}
+                            onClick={startBinariesScan}
+                            style={{ display: binariesScanning ? 'none' : undefined }}
+                        >
+                            Scan
+                        </Button>
+                        <Button
+                            data-testid="binaries-stop-btn"
+                            size="small"
+                            danger
+                            icon={<StopOutlined />}
+                            onClick={stopBinariesScan}
+                            disabled={!binariesScanning}
+                        >
+                            Stop
+                        </Button>
+                    </Space>
+                }
+            >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <Text data-testid="binary-selected-total">
+                        Selected: {formatBytes(selectedBinaryTotal)} to clear
+                    </Text>
+                    <Button
+                        data-testid="binary-delete-btn"
+                        size="small"
+                        danger
+                        disabled={selectedBinaryPaths.size === 0}
+                        onClick={() => setDeleteModalOpen(true)}
+                    >
+                        Delete Selected
+                    </Button>
+                </div>
+                {deleteSuccess && (
+                    <Alert data-testid="binary-delete-success" message="Selected binaries deleted" type="success" showIcon style={{ marginBottom: '12px' }} />
+                )}
+                {visibleBinaryRepos.length > 0 || binariesScanning || binariesDone ? (
+                    <div data-testid="binaries-tree" style={{ width: '100%', textAlign: 'left' }}>
+                        {visibleBinaryRepos.map(([repoPath, hits]) => {
+                            const repoKey = testIdKey(repoPath);
+                            const repoSize = hits.reduce((sum, h) => sum + h.size, 0);
+                            const selectedInRepo = hits.filter(h => selectedBinaryPaths.has(h.path)).length;
+                            const allSelected = selectedInRepo === hits.length;
+                            const someSelected = selectedInRepo > 0 && !allSelected;
+                            return (
+                                <div key={repoPath} style={{ marginBottom: '8px', textAlign: 'left' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                        <Checkbox
+                                            data-testid={`binary-repo-checkbox-${repoKey}`}
+                                            checked={allSelected}
+                                            indeterminate={someSelected}
+                                            onChange={e => toggleRepoBinaries(repoPath, e.target.checked)}
+                                        >
+                                            <span data-testid={`binary-repo-row-${repoKey}`}>{repoPath}</span>
+                                        </Checkbox>
+                                        <Text strong>{formatBytes(repoSize)}</Text>
+                                    </div>
+                                    <div style={{ paddingLeft: '24px', textAlign: 'left' }}>
+                                        {hits.map(hit => {
+                                            const rowKey = testIdKey(hit.path);
+                                            return (
+                                                <div key={hit.path} data-testid={`binary-row-${rowKey}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                                    <Checkbox
+                                                        data-testid={`binary-checkbox-${rowKey}`}
+                                                        checked={selectedBinaryPaths.has(hit.path)}
+                                                        onChange={e => toggleBinaryPath(hit.path, e.target.checked)}
+                                                    >
+                                                        <Space size={4}>
+                                                            <span data-testid={`binary-path-${rowKey}`}>{hit.path}</span>
+                                                            <Tag data-testid={`binary-kind-${rowKey}`}>{hit.kind}</Tag>
+                                                        </Space>
+                                                    </Checkbox>
+                                                    <Text strong>{hit.sizeHuman}</Text>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <Text type="secondary">Click Scan to find Go/Mach-O/ELF binaries in git repos</Text>
+                )}
+                {binariesDone && binaryHits.length === 0 && (
+                    <Text data-testid="binaries-empty-state" type="secondary">No binaries found under ~</Text>
+                )}
+            </Card>
+
+            <Modal
+                data-testid="binary-delete-confirm-modal"
+                title="Delete selected binaries?"
+                open={deleteModalOpen}
+                onCancel={() => setDeleteModalOpen(false)}
+                footer={[
+                    <Button key="cancel" onClick={() => setDeleteModalOpen(false)}>Cancel</Button>,
+                    <Button
+                        key="confirm"
+                        data-testid="binary-delete-confirm-btn"
+                        type="primary"
+                        danger
+                        loading={deleting}
+                        onClick={confirmDeleteBinaries}
+                    >
+                        Delete
+                    </Button>,
+                ]}
+            >
+                <Text>
+                    Delete {selectedBinaryPaths.size} selected file(s), freeing {formatBytes(selectedBinaryTotal)}?
+                </Text>
+            </Modal>
         </div>
     );
 }

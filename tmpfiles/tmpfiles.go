@@ -152,50 +152,97 @@ func parseScanArgs(args []string, homeDir string) (scanOptions, bool, error) {
 	return opts, false, nil
 }
 
+// ScanOptions configures a binary scan under git repositories.
+type ScanOptions struct {
+	Roots    []string
+	MaxDepth int
+	Verbose  bool
+	Stderr   io.Writer
+	OnRepo   func(repo scan_repo.Repo) error
+}
+
+// BinaryScanSummary holds aggregate binary scan results.
+type BinaryScanSummary struct {
+	Repos       int
+	Binaries    int
+	TotalSize   int64
+	TotalHuman  string
+}
+
+// BinaryHitCallback is invoked for each discovered binary.
+type BinaryHitCallback func(hit BinaryHit, repo scan_repo.Repo) error
+
+// ScanBinaries discovers git repos and classifies binaries, invoking onHit for each match.
+func ScanBinaries(ctx context.Context, opts ScanOptions, homeDir string, onHit BinaryHitCallback) (BinaryScanSummary, error) {
+	summary := BinaryScanSummary{}
+	processRepo := func(repo scan_repo.Repo) error {
+		summary.Repos++
+		if err := scanRepoFiles(ctx, repo, homeDir, opts.Verbose, opts.Stderr, func(hit BinaryHit) error {
+			summary.Binaries++
+			summary.TotalSize += hit.Size
+			if onHit != nil {
+				return onHit(hit, repo)
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		if opts.OnRepo != nil {
+			return opts.OnRepo(repo)
+		}
+		return nil
+	}
+
+	_, err := scan_repo.Scan(ctx, scan_repo.Options{
+		Roots:    opts.Roots,
+		MaxDepth: opts.MaxDepth,
+		Verbose:  opts.Verbose,
+		Stderr:   opts.Stderr,
+		OnRepo:   processRepo,
+	})
+	if err != nil {
+		return summary, err
+	}
+
+	summary.TotalHuman = FormatHumanSize(summary.TotalSize)
+	return summary, nil
+}
+
 func runScan(ctx context.Context, opts scanOptions, homeDir string, stdout, stderr io.Writer) (*ScanResult, error) {
-	repos, err := scan_repo.Scan(ctx, scan_repo.Options{
+	scanOpts := ScanOptions{
 		Roots:    opts.roots,
 		MaxDepth: opts.maxDepth,
 		Verbose:  opts.verbose,
 		Stderr:   stderr,
+	}
+	var result ScanResult
+	result.Roots = opts.roots
+	summary, err := ScanBinaries(ctx, scanOpts, homeDir, func(hit BinaryHit, _ scan_repo.Repo) error {
+		result.Binaries = append(result.Binaries, hit)
+		result.TotalSize += hit.Size
+		if opts.json {
+			if err := writeJSONHit(stdout, hit); err != nil {
+				return err
+			}
+		} else {
+			if _, err := fmt.Fprintf(stdout, "%s  %-5s  %s  (repo: %s)\n", hit.SizeHuman, hit.Kind, hit.Path, hit.RepoPath); err != nil {
+				return err
+			}
+		}
+		return flush(stdout)
 	})
 	if err != nil {
-		return nil, err
+		return &result, err
 	}
-
-	result := &ScanResult{
-		Roots: opts.roots,
-		Repos: len(repos),
-	}
-
-	for _, repo := range repos {
-		err := scanRepo(ctx, repo, homeDir, opts.verbose, stderr, func(hit BinaryHit) error {
-			result.Binaries = append(result.Binaries, hit)
-			result.TotalSize += hit.Size
-			if opts.json {
-				if err := writeJSONHit(stdout, hit); err != nil {
-					return err
-				}
-			} else {
-				if _, err := fmt.Fprintf(stdout, "%s  %-5s  %s  (repo: %s)\n", hit.SizeHuman, hit.Kind, hit.Path, hit.RepoPath); err != nil {
-					return err
-				}
-			}
-			return flush(stdout)
-		})
-		if err != nil {
-			return result, err
-		}
-	}
-
-	result.TotalHuman = FormatHumanSize(result.TotalSize)
+	result.Repos = summary.Repos
+	result.TotalHuman = summary.TotalHuman
 	if _, err := fmt.Fprintf(stdout, "Found %d binaries, total %s\n", len(result.Binaries), result.TotalHuman); err != nil {
-		return result, err
+		return &result, err
 	}
-	return result, flush(stdout)
+	return &result, flush(stdout)
 }
 
-func scanRepo(ctx context.Context, repo scan_repo.Repo, homeDir string, verbose bool, stderr io.Writer, onHit func(BinaryHit) error) error {
+func scanRepoFiles(ctx context.Context, repo scan_repo.Repo, homeDir string, verbose bool, stderr io.Writer, onHit func(BinaryHit) error) error {
 	return filepath.WalkDir(repo.Path, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			if os.IsPermission(walkErr) {
@@ -236,7 +283,7 @@ func scanRepo(ctx context.Context, repo scan_repo.Repo, homeDir string, verbose 
 			return nil
 		}
 
-		hit, ok := classifyFile(path, info.Size(), repo, homeDir)
+		hit, ok := ClassifyFile(path, info.Size(), repo, homeDir)
 		if !ok {
 			return nil
 		}
@@ -244,7 +291,8 @@ func scanRepo(ctx context.Context, repo scan_repo.Repo, homeDir string, verbose 
 	})
 }
 
-func classifyFile(path string, size int64, repo scan_repo.Repo, homeDir string) (BinaryHit, bool) {
+// ClassifyFile returns a BinaryHit when path is a Go/Mach-O/ELF binary.
+func ClassifyFile(path string, size int64, repo scan_repo.Repo, homeDir string) (BinaryHit, bool) {
 	typeDesc, isBinary, detectErr := detect.DetectFileType(path)
 	if detectErr != nil {
 		return BinaryHit{}, false
@@ -268,12 +316,12 @@ func classifyFile(path string, size int64, repo scan_repo.Repo, homeDir string) 
 		typeDesc = kind
 	}
 	return BinaryHit{
-		Path:      displayPath(path, homeDir),
+		Path:      DisplayPath(path, homeDir),
 		Size:      size,
 		SizeHuman: FormatHumanSize(size),
 		Kind:      kind,
 		TypeDesc:  typeDesc,
-		RepoPath:  displayPath(repo.Path, homeDir),
+		RepoPath:  DisplayPath(repo.Path, homeDir),
 		RepoName:  repo.Name,
 	}, true
 }
@@ -327,7 +375,8 @@ func expandPath(path string, homeDir string) (string, error) {
 	return path, nil
 }
 
-func displayPath(path string, homeDir string) string {
+// DisplayPath converts an absolute path to a ~/ prefixed slash path for display.
+func DisplayPath(path string, homeDir string) string {
 	clean := filepath.Clean(path)
 	if homeDir == "" {
 		return clean

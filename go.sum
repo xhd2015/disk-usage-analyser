@@ -1,3 +1,5 @@
+github.com/xhd2015/dot-pkgs/go-pkgs v0.0.33 h1:UWPJvLtqlTfOqPiWPW2DN+ga2wI6y3EVUFRqHwTpNWY=
+github.com/xhd2015/dot-pkgs/go-pkgs v0.0.33/go.mod h1:k+/cdkr69+4yvY8aMjJ1svyMZGktcCDBdhrKkacGpjo=
 github.com/xhd2015/kool v0.0.99 h1:aUlVTTDYF5K5ZOVXp0C0HLLqc/6Gs5I1pZ0A4hbxHvs=
 github.com/xhd2015/kool v0.0.99/go.mod h1:UIWfoN/EZsCwFtCCvOoC+g805k5UJfi8wCuTO6QzDDg=
 github.com/xhd2015/less-flags v1.0.0 h1:ay8YG0WSXn59CAwBYUcAsq7l+mUwDEMUqaW/Fy0ZoCM=

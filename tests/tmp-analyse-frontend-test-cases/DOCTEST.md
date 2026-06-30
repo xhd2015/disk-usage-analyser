@@ -1,7 +1,8 @@
 # Tmp Files Analyse — Frontend Test Cases
 
 UI tests for the tmp-analyse page: structure, navigation, scan interaction, breakdown
-display, runtime stats sections, and live breakdown progress during scans.
+display, runtime stats sections, live breakdown progress, and Repository Scans
+(worktrees + binaries sections with independent scan controls and delete UX).
 
 ## Version
 
@@ -17,7 +18,8 @@ When each location completes, a **location** event finalizes sizes and may attac
 The page renders cards with **data-testid** hooks for headings, summary bar, breakdown
 table rows, vm-internal section rows, runtime section rows, and scan badges.
 Tests drive the page through **playwright-debug** scripts against a locally started
-Go dev server.
+Go dev server. Repository Scans leaves use `ui-automation` and `slow` labels when
+they depend on completing a subsection scan.
 
 ## Test Tree
 
@@ -29,8 +31,27 @@ tmp-analyse-frontend-test-cases/
 ├── runtime-section/
 │   ├── docker-after-scan/
 │   └── podman-after-scan/
-└── podman-vm-internal/
-    └── after-scan/
+├── podman-vm-internal/
+│   └── after-scan/
+├── repository-scans/
+│   └── renders/
+├── worktrees-section/
+│   ├── after-scan/
+│   ├── left-aligned/
+│   ├── filter-under-10m-default/
+│   ├── filter-show-under-10m/
+│   └── sort-by-size-desc/
+├── worktrees-live-stream/
+├── binaries-section/
+│   ├── after-scan/
+│   ├── left-aligned/
+│   ├── filter-under-1m-default/
+│   ├── filter-show-under-1m/
+│   ├── sort-by-size-desc/
+│   ├── select-and-total/
+│   ├── delete-selected/
+│   └── repo-select-all/
+└── independent-scan-controls/
 ```
 
 ## Test Index
@@ -42,6 +63,22 @@ tmp-analyse-frontend-test-cases/
 | verify-runtime-section/docker-after-scan | docker-runtime-section.js |
 | verify-runtime-section/podman-after-scan | podman-runtime-section.js |
 | podman-vm-internal/after-scan | podman-vm-internal-section.js |
+| repository-scans/renders | repository-scans-renders.js |
+| worktrees-section/after-scan | worktrees-after-scan.js |
+| worktrees-section/left-aligned | worktrees-left-aligned.js |
+| worktrees-section/filter-under-10m-default | worktrees-filter-under-10m-default.js |
+| worktrees-section/filter-show-under-10m | worktrees-filter-show-under-10m.js |
+| worktrees-section/sort-by-size-desc | worktrees-sort-by-size-desc.js |
+| worktrees-live-stream | worktrees-live-stream.js |
+| binaries-section/after-scan | binaries-after-scan.js |
+| binaries-section/left-aligned | binaries-left-aligned.js |
+| binaries-section/filter-under-1m-default | binaries-filter-under-1m-default.js |
+| binaries-section/filter-show-under-1m | binaries-filter-show-under-1m.js |
+| binaries-section/sort-by-size-desc | binaries-sort-by-size-desc.js |
+| binaries-section/select-and-total | binaries-select-total.js |
+| binaries-section/delete-selected | binaries-delete-selected.js |
+| binaries-section/repo-select-all | binaries-repo-select-all.js |
+| independent-scan-controls | independent-scan-controls.js |
 
 ## How to Run
 

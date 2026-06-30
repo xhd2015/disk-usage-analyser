@@ -87,6 +87,11 @@ func Serve(port int, dev bool) error {
 		Handler: mux,
 	}
 
+	err := RegisterAPI(mux)
+	if err != nil {
+		return err
+	}
+
 	if dev {
 		if !checkPort(5173) {
 			// Create context for managing subprocesses
@@ -127,11 +132,6 @@ func Serve(port int, dev bool) error {
 		if err != nil {
 			return err
 		}
-	}
-
-	err := RegisterAPI(mux)
-	if err != nil {
-		return err
 	}
 
 	fmt.Printf("Serving directory preview at http://localhost:%d\n", port)
@@ -233,6 +233,9 @@ func RegisterAPI(mux *http.ServeMux) error {
 	mux.HandleFunc("/api/disks/open", handleOpenDisk)
 	mux.HandleFunc("/api/tmp-analyse-locations", HandleTmpAnalyseLocations)
 	mux.HandleFunc("/api/tmp-analyse", HandleTmpAnalyse)
+	mux.HandleFunc("/api/tmp-worktrees-scan", HandleTmpWorktreesScan)
+	mux.HandleFunc("/api/tmp-binaries-scan", HandleTmpBinariesScan)
+	mux.HandleFunc("/api/tmp-binaries-delete", HandleTmpBinariesDelete)
 
 	return nil
 }

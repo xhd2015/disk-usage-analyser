@@ -1,0 +1,12 @@
+{
+  "showUnder1M": true,
+  "binaryByRepo": {
+    "/tiny-only": [
+      {"path": "/tiny-only/a", "size": 512000, "sizeHuman": "500 KB", "kind": "go", "typeDesc": "", "repoPath": "/tiny-only", "repoName": "tiny"}
+    ],
+    "/mixed": [
+      {"path": "/mixed/small", "size": 800000, "sizeHuman": "781.3 KB", "kind": "go", "typeDesc": "", "repoPath": "/mixed", "repoName": "mixed"},
+      {"path": "/mixed/big", "size": 2097152, "sizeHuman": "2 MB", "kind": "go", "typeDesc": "", "repoPath": "/mixed", "repoName": "mixed"}
+    ]
+  }
+}

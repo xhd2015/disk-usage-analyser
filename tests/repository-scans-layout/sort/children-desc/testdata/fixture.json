@@ -1,0 +1,9 @@
+{
+  "linkedByRepo": {
+    "/repo": [
+      {"repoPath": "/repo", "repoName": "repo", "path": "/repo/wt-small", "head": "abc", "isMain": false, "size": 2097152, "sizeHuman": "2 MB", "fileCount": 1},
+      {"repoPath": "/repo", "repoName": "repo", "path": "/repo/wt-large", "head": "def", "isMain": false, "size": 8388608, "sizeHuman": "8 MB", "fileCount": 1},
+      {"repoPath": "/repo", "repoName": "repo", "path": "/repo/wt-mid", "head": "ghi", "isMain": false, "size": 5242880, "sizeHuman": "5 MB", "fileCount": 1}
+    ]
+  }
+}

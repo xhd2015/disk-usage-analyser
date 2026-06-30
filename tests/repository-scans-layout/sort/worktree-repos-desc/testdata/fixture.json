@@ -1,0 +1,7 @@
+{
+  "worktreeRepos": [
+    {"repoPath": "/a", "repoName": "a", "size": 5242880, "sizeHuman": "5 MB", "fileCount": 1},
+    {"repoPath": "/b", "repoName": "b", "size": 20971520, "sizeHuman": "20 MB", "fileCount": 1},
+    {"repoPath": "/c", "repoName": "c", "size": 10485760, "sizeHuman": "10 MB", "fileCount": 1}
+  ]
+}
