@@ -1,11 +1,15 @@
 package run
 
 import (
+	"context"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
 	"disk-usage-analyser/server"
+	"disk-usage-analyser/tmpfiles"
 
 	"github.com/xhd2015/kool/pkgs/web"
 	"github.com/xhd2015/less-gen/flags"
@@ -15,10 +19,51 @@ const help = `
 Usage: disk-usage-analyser <subcommand>
 
 Subcommands:
-  create    Create a new presentation
+  tmp-files scan    Scan temporary file candidates
 `
 
+type Options struct {
+	Stdout      io.Writer
+	Stderr      io.Writer
+	HomeDir     string
+	StartServer func(context.Context, ServerOptions) error
+}
+
+type ServerOptions struct {
+	Port      int
+	Dev       bool
+	Component string
+}
+
 func Run(args []string) error {
+	return RunWithOptions(context.Background(), args, Options{})
+}
+
+func RunWithOptions(ctx context.Context, args []string, opts Options) error {
+	stdout := opts.Stdout
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+	stderr := opts.Stderr
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+
+	if len(args) > 0 && args[0] == "tmp-files" {
+		_, exitCode, err := tmpfiles.RunCLI(ctx, args[1:], tmpfiles.CLIOptions{
+			Stdout:  stdout,
+			Stderr:  stderr,
+			HomeDir: opts.HomeDir,
+		})
+		if err != nil {
+			return err
+		}
+		if exitCode != 0 {
+			return fmt.Errorf("tmp-files exited with code %d", exitCode)
+		}
+		return nil
+	}
+
 	var devFlag bool
 	var component string
 	args, err := flags.
@@ -44,7 +89,7 @@ func Run(args []string) error {
 	}
 
 	if component == "list" {
-		fmt.Println("Available components: App")
+		fmt.Fprintln(stdout, "Available components: App")
 		return nil
 	}
 
@@ -52,6 +97,14 @@ func Run(args []string) error {
 	port, err := web.FindAvailablePort(8080, 100)
 	if err != nil {
 		return err
+	}
+
+	if opts.StartServer != nil {
+		return opts.StartServer(ctx, ServerOptions{
+			Port:      port,
+			Dev:       devFlag,
+			Component: component,
+		})
 	}
 
 	if component != "" {
