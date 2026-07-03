@@ -236,6 +236,8 @@ func RegisterAPI(mux *http.ServeMux) error {
 	mux.HandleFunc("/api/tmp-worktrees-scan", HandleTmpWorktreesScan)
 	mux.HandleFunc("/api/tmp-binaries-scan", HandleTmpBinariesScan)
 	mux.HandleFunc("/api/tmp-binaries-delete", HandleTmpBinariesDelete)
+	mux.HandleFunc("/api/tmp-named-scan", HandleTmpNamedScan)
+	mux.HandleFunc("/api/tmp-named-delete", HandleTmpNamedDelete)
 
 	return nil
 }

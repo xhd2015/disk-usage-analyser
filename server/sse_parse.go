@@ -83,6 +83,43 @@ func ParseWorktreesSSE(body string) (*WorktreesSSEResult, error) {
 	return resp, nil
 }
 
+// NamedSSEResult holds parsed tmp-named-scan SSE output.
+type NamedSSEResult struct {
+	SSEOutput  string
+	EventTypes []string
+	NamedHits  []NamedHit
+	Summary    *NamedScanSummary
+}
+
+// ParseNamedSSE parses SSE body from tmp-named-scan.
+func ParseNamedSSE(body string) (*NamedSSEResult, error) {
+	resp := &NamedSSEResult{SSEOutput: body}
+	lines := strings.Split(body, "\n")
+	var currentEvent string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "event: ") {
+			currentEvent = strings.TrimPrefix(line, "event: ")
+			resp.EventTypes = append(resp.EventTypes, currentEvent)
+		}
+		if strings.HasPrefix(line, "data: ") && currentEvent != "" {
+			data := strings.TrimPrefix(line, "data: ")
+			switch currentEvent {
+			case "named":
+				var hit NamedHit
+				if err := json.Unmarshal([]byte(data), &hit); err == nil {
+					resp.NamedHits = append(resp.NamedHits, hit)
+				}
+			case "summary":
+				var summary NamedScanSummary
+				if err := json.Unmarshal([]byte(data), &summary); err == nil {
+					resp.Summary = &summary
+				}
+			}
+		}
+	}
+	return resp, nil
+}
+
 // EventBefore reports whether event `before` appears before `after` in SSE event order.
 func EventBefore(events []string, before, after string) bool {
 	beforeIdx, afterIdx := -1, -1

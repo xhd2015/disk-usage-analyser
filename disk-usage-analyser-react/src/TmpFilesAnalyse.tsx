@@ -7,7 +7,11 @@ import {
     sortBinaryRepos,
     sortLinkedWorktrees,
     sortWorktreeRepos,
+    filterNamedRepos,
+    sortNamedRepos,
+    sortNamedHits,
 } from './repositoryScansLayout';
+import type { NamedHit } from './repositoryScansLayout';
 
 const { Text } = Typography;
 
@@ -237,6 +241,31 @@ function TmpFilesAnalyse() {
     const [deleting, setDeleting] = useState(false);
     const binariesESRef = useRef<EventSource | null>(null);
 
+    const [namedScanning, setNamedScanning] = useState(false);
+    const [namedDone, setNamedDone] = useState(false);
+    const [namedHits, setNamedHits] = useState<NamedHit[]>([]);
+    const [showNamedUnder1M, setShowNamedUnder1M] = useState(false);
+    const [selectedNamedPaths, setSelectedNamedPaths] = useState<Set<string>>(new Set());
+    const [namedDeleteModalOpen, setNamedDeleteModalOpen] = useState(false);
+    const [namedDeleteSuccess, setNamedDeleteSuccess] = useState(false);
+    const [namedDeleting, setNamedDeleting] = useState(false);
+    const namedESRef = useRef<EventSource | null>(null);
+
+    const [vendorScanning, setVendorScanning] = useState(false);
+    const [vendorDone, setVendorDone] = useState(false);
+    const [vendorHits, setVendorHits] = useState<NamedHit[]>([]);
+    const [showVendorUnder1M, setShowVendorUnder1M] = useState(false);
+    const [selectedVendorPaths, setSelectedVendorPaths] = useState<Set<string>>(new Set());
+    const [vendorDeleteModalOpen, setVendorDeleteModalOpen] = useState(false);
+    const [vendorDeleteSuccess, setVendorDeleteSuccess] = useState(false);
+    const [vendorDeleting, setVendorDeleting] = useState(false);
+    const vendorESRef = useRef<EventSource | null>(null);
+
+    const [worktreeRunningTotal, setWorktreeRunningTotal] = useState(0);
+    const [binaryRunningTotal, setBinaryRunningTotal] = useState(0);
+    const [namedRunningTotal, setNamedRunningTotal] = useState(0);
+    const [vendorRunningTotal, setVendorRunningTotal] = useState(0);
+
     useEffect(() => {
         fetch('/api/tmp-analyse-locations')
             .then(res => res.json())
@@ -399,6 +428,7 @@ function TmpFilesAnalyse() {
         setWorktreesDone(false);
         setWorktreeRepos([]);
         setWorktreeHits([]);
+        setWorktreeRunningTotal(0);
 
         const es = new EventSource('/api/tmp-worktrees-scan');
         worktreesESRef.current = es;
@@ -406,11 +436,13 @@ function TmpFilesAnalyse() {
         es.addEventListener('repo', (e) => {
             const row: WorktreeRepoRow = JSON.parse((e as MessageEvent).data);
             setWorktreeRepos(prev => [...prev, row]);
+            setWorktreeRunningTotal(prev => prev + row.size);
         });
 
         es.addEventListener('worktree', (e) => {
             const hit: WorktreeHit = JSON.parse((e as MessageEvent).data);
             setWorktreeHits(prev => [...prev, hit]);
+            setWorktreeRunningTotal(prev => prev + hit.size);
         });
 
         es.addEventListener('done', () => {
@@ -453,6 +485,7 @@ function TmpFilesAnalyse() {
         setBinaryHits([]);
         setSelectedBinaryPaths(new Set());
         setDeleteSuccess(false);
+        setBinaryRunningTotal(0);
 
         const es = new EventSource('/api/tmp-binaries-scan');
         binariesESRef.current = es;
@@ -460,6 +493,7 @@ function TmpFilesAnalyse() {
         es.addEventListener('binary', (e) => {
             const hit: BinaryHit = JSON.parse((e as MessageEvent).data);
             setBinaryHits(prev => [...prev, hit]);
+            setBinaryRunningTotal(prev => prev + hit.size);
         });
 
         es.addEventListener('done', () => {
@@ -490,6 +524,204 @@ function TmpFilesAnalyse() {
             binariesESRef.current = null;
         }
         setBinariesScanning(false);
+    };
+
+    const startNamedScan = () => {
+        if (namedESRef.current) {
+            namedESRef.current.close();
+            namedESRef.current = null;
+        }
+        setNamedScanning(true);
+        setNamedDone(false);
+        setNamedHits([]);
+        setSelectedNamedPaths(new Set());
+        setNamedDeleteSuccess(false);
+        setNamedRunningTotal(0);
+
+        const es = new EventSource('/api/tmp-named-scan?name=node_modules');
+        namedESRef.current = es;
+
+        es.addEventListener('named', (e) => {
+            const hit: NamedHit = JSON.parse((e as MessageEvent).data);
+            setNamedHits(prev => [...prev, hit]);
+            setNamedRunningTotal(prev => prev + hit.size);
+        });
+
+        es.addEventListener('done', () => {
+            es.close();
+            namedESRef.current = null;
+            setNamedScanning(false);
+            setNamedDone(true);
+        });
+
+        es.addEventListener('server_error', (e) => {
+            console.error('Named SSE error:', JSON.parse((e as MessageEvent).data));
+            es.close();
+            namedESRef.current = null;
+            setNamedScanning(false);
+        });
+
+        es.onerror = () => {
+            if (es.readyState === EventSource.CLOSED) return;
+            es.close();
+            namedESRef.current = null;
+            setNamedScanning(false);
+        };
+    };
+
+    const stopNamedScan = () => {
+        if (namedESRef.current) {
+            namedESRef.current.close();
+            namedESRef.current = null;
+        }
+        setNamedScanning(false);
+    };
+
+    const toggleNamedPath = (path: string, checked: boolean) => {
+        setSelectedNamedPaths(prev => {
+            const next = new Set(prev);
+            if (checked) {
+                next.add(path);
+            } else {
+                next.delete(path);
+            }
+            return next;
+        });
+    };
+
+    const toggleNamedRepo = (repoPath: string, checked: boolean) => {
+        const paths = namedHits.filter(hit => hit.repoPath === repoPath).map(hit => hit.path);
+        setSelectedNamedPaths(prev => {
+            const next = new Set(prev);
+            for (const path of paths) {
+                if (checked) {
+                    next.add(path);
+                } else {
+                    next.delete(path);
+                }
+            }
+            return next;
+        });
+    };
+
+    const confirmDeleteNamed = async () => {
+        setNamedDeleting(true);
+        try {
+            const res = await fetch('/api/tmp-named-delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paths: Array.from(selectedNamedPaths) }),
+            });
+            const result = await res.json();
+            const deletedSet = new Set<string>(result.deleted || []);
+            setNamedHits(prev => prev.filter(hit => !deletedSet.has(hit.path)));
+            setSelectedNamedPaths(new Set());
+            setNamedDeleteSuccess(true);
+            setNamedDeleteModalOpen(false);
+        } catch (err) {
+            console.error('Named delete failed:', err);
+        } finally {
+            setNamedDeleting(false);
+        }
+    };
+
+    const startVendorScan = () => {
+        if (vendorESRef.current) {
+            vendorESRef.current.close();
+            vendorESRef.current = null;
+        }
+        setVendorScanning(true);
+        setVendorDone(false);
+        setVendorHits([]);
+        setSelectedVendorPaths(new Set());
+        setVendorDeleteSuccess(false);
+        setVendorRunningTotal(0);
+
+        const es = new EventSource('/api/tmp-named-scan?name=vendor');
+        vendorESRef.current = es;
+
+        es.addEventListener('named', (e) => {
+            const hit: NamedHit = JSON.parse((e as MessageEvent).data);
+            setVendorHits(prev => [...prev, hit]);
+            setVendorRunningTotal(prev => prev + hit.size);
+        });
+
+        es.addEventListener('done', () => {
+            es.close();
+            vendorESRef.current = null;
+            setVendorScanning(false);
+            setVendorDone(true);
+        });
+
+        es.addEventListener('server_error', (e) => {
+            console.error('Vendor SSE error:', JSON.parse((e as MessageEvent).data));
+            es.close();
+            vendorESRef.current = null;
+            setVendorScanning(false);
+        });
+
+        es.onerror = () => {
+            if (es.readyState === EventSource.CLOSED) return;
+            es.close();
+            vendorESRef.current = null;
+            setVendorScanning(false);
+        };
+    };
+
+    const stopVendorScan = () => {
+        if (vendorESRef.current) {
+            vendorESRef.current.close();
+            vendorESRef.current = null;
+        }
+        setVendorScanning(false);
+    };
+
+    const toggleVendorPath = (path: string, checked: boolean) => {
+        setSelectedVendorPaths(prev => {
+            const next = new Set(prev);
+            if (checked) {
+                next.add(path);
+            } else {
+                next.delete(path);
+            }
+            return next;
+        });
+    };
+
+    const toggleVendorRepo = (repoPath: string, checked: boolean) => {
+        const paths = vendorHits.filter(hit => hit.repoPath === repoPath).map(hit => hit.path);
+        setSelectedVendorPaths(prev => {
+            const next = new Set(prev);
+            for (const path of paths) {
+                if (checked) {
+                    next.add(path);
+                } else {
+                    next.delete(path);
+                }
+            }
+            return next;
+        });
+    };
+
+    const confirmDeleteVendor = async () => {
+        setVendorDeleting(true);
+        try {
+            const res = await fetch('/api/tmp-named-delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paths: Array.from(selectedVendorPaths) }),
+            });
+            const result = await res.json();
+            const deletedSet = new Set<string>(result.deleted || []);
+            setVendorHits(prev => prev.filter(hit => !deletedSet.has(hit.path)));
+            setSelectedVendorPaths(new Set());
+            setVendorDeleteSuccess(true);
+            setVendorDeleteModalOpen(false);
+        } catch (err) {
+            console.error('Vendor delete failed:', err);
+        } finally {
+            setVendorDeleting(false);
+        }
     };
 
     const selectedBinaryTotal = binaryHits
@@ -573,6 +805,40 @@ function TmpFilesAnalyse() {
 
     const filteredBinariesByRepo = filterBinaryRepos(binariesByRepoRaw, showBinaryUnder1M);
     const visibleBinaryRepos = sortBinaryRepos(filteredBinariesByRepo);
+
+    const namedByRepoRaw = (() => {
+        const byRepo = new Map<string, NamedHit[]>();
+        for (const hit of namedHits) {
+            const list = byRepo.get(hit.repoPath) || [];
+            list.push(hit);
+            byRepo.set(hit.repoPath, list);
+        }
+        return byRepo;
+    })();
+
+    const vendorByRepoRaw = (() => {
+        const byRepo = new Map<string, NamedHit[]>();
+        for (const hit of vendorHits) {
+            const list = byRepo.get(hit.repoPath) || [];
+            list.push(hit);
+            byRepo.set(hit.repoPath, list);
+        }
+        return byRepo;
+    })();
+
+    const filteredNamedByRepo = filterNamedRepos(namedByRepoRaw, showNamedUnder1M);
+    const visibleNamedRepos = sortNamedRepos(filteredNamedByRepo);
+
+    const filteredVendorByRepo = filterNamedRepos(vendorByRepoRaw, showVendorUnder1M);
+    const visibleVendorRepos = sortNamedRepos(filteredVendorByRepo);
+
+    const selectedNamedTotal = namedHits
+        .filter(hit => selectedNamedPaths.has(hit.path))
+        .reduce((sum, hit) => sum + hit.size, 0);
+
+    const selectedVendorTotal = vendorHits
+        .filter(hit => selectedVendorPaths.has(hit.path))
+        .reduce((sum, hit) => sum + hit.size, 0);
 
     const coreCategories = new Set(['trash', 'temp', 'cache', 'log', 'swap']);
     const coreLocations = locations.filter(l => coreCategories.has(l.category));
@@ -838,6 +1104,9 @@ function TmpFilesAnalyse() {
                 title={
                     <Space>
                         <span>Git Worktrees</span>
+                        <span data-testid="worktrees-running-total" style={{ color: '#888' }}>
+                            ({formatBytes(worktreeRunningTotal)})
+                        </span>
                         {worktreesScanning && (
                             <span data-testid="worktrees-scanning-badge"><SyncOutlined spin style={{ color: '#1677ff' }} /></span>
                         )}
@@ -915,6 +1184,9 @@ function TmpFilesAnalyse() {
                 title={
                     <Space>
                         <span>Binary files</span>
+                        <span data-testid="binaries-running-total" style={{ color: '#888' }}>
+                            ({formatBytes(binaryRunningTotal)})
+                        </span>
                         {binariesScanning && (
                             <span data-testid="binaries-scanning-badge"><SyncOutlined spin style={{ color: '#1677ff' }} /></span>
                         )}
@@ -1024,6 +1296,292 @@ function TmpFilesAnalyse() {
                     <Text data-testid="binaries-empty-state" type="secondary">No binaries found under ~</Text>
                 )}
             </Card>
+
+            <Card data-testid="node-modules-section" size="small" style={{ marginBottom: '16px' }}
+                title={
+                    <Space>
+                        <span>node_modules</span>
+                        <span data-testid="node-modules-running-total" style={{ color: '#888' }}>
+                            ({formatBytes(namedRunningTotal)})
+                        </span>
+                        {namedScanning && (
+                            <span data-testid="node-modules-scanning-badge"><SyncOutlined spin style={{ color: '#1677ff' }} /></span>
+                        )}
+                        {namedDone && !namedScanning && (
+                            <span data-testid="node-modules-done-badge"><CheckCircleOutlined style={{ color: '#52c41a' }} /></span>
+                        )}
+                    </Space>
+                }
+                extra={
+                    <Space>
+                        <Checkbox
+                            data-testid="node-modules-show-under-1m"
+                            checked={showNamedUnder1M}
+                            onChange={e => setShowNamedUnder1M(e.target.checked)}
+                        >
+                            &lt;1M
+                        </Checkbox>
+                        <Button
+                            data-testid="node-modules-scan-btn"
+                            size="small"
+                            type="primary"
+                            icon={<PlayCircleOutlined />}
+                            onClick={startNamedScan}
+                            style={{ display: namedScanning ? 'none' : undefined }}
+                        >
+                            Scan
+                        </Button>
+                        <Button
+                            data-testid="node-modules-stop-btn"
+                            size="small"
+                            danger
+                            icon={<StopOutlined />}
+                            onClick={stopNamedScan}
+                            disabled={!namedScanning}
+                        >
+                            Stop
+                        </Button>
+                    </Space>
+                }
+            >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <Text data-testid="node-modules-selected-total">
+                        Selected: {formatBytes(selectedNamedTotal)} to clear
+                    </Text>
+                    <Button
+                        data-testid="node-modules-delete-btn"
+                        size="small"
+                        danger
+                        disabled={selectedNamedPaths.size === 0}
+                        onClick={() => setNamedDeleteModalOpen(true)}
+                    >
+                        Delete Selected
+                    </Button>
+                </div>
+                {namedDeleteSuccess && (
+                    <Alert data-testid="node-modules-delete-success" message="Selected node_modules deleted" type="success" showIcon style={{ marginBottom: '12px' }} />
+                )}
+                {visibleNamedRepos.length > 0 || namedScanning || namedDone ? (
+                    <div data-testid="node-modules-tree" style={{ width: '100%', textAlign: 'left' }}>
+                        {visibleNamedRepos.map(([repoPath, hits]) => {
+                            const repoKey = testIdKey(repoPath);
+                            const sortHits = sortNamedHits(hits);
+                            const repoSize = sortHits.reduce((sum, h) => sum + h.size, 0);
+                            const selectedInRepo = sortHits.filter(h => selectedNamedPaths.has(h.path)).length;
+                            const allSelected = selectedInRepo === sortHits.length;
+                            const someSelected = selectedInRepo > 0 && !allSelected;
+                            return (
+                                <div key={repoPath} style={{ marginBottom: '8px', textAlign: 'left' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                        <Checkbox
+                                            data-testid={`node-modules-repo-checkbox-${repoKey}`}
+                                            checked={allSelected}
+                                            indeterminate={someSelected}
+                                            onChange={e => toggleNamedRepo(repoPath, e.target.checked)}
+                                        >
+                                            <span data-testid={`node-modules-repo-row-${repoKey}`}>{repoPath}</span>
+                                        </Checkbox>
+                                        <Text strong>{formatBytes(repoSize)}</Text>
+                                    </div>
+                                    <div style={{ paddingLeft: '24px', textAlign: 'left' }}>
+                                        {sortHits.map(hit => {
+                                            const rowKey = testIdKey(hit.path);
+                                            return (
+                                                <div key={hit.path} data-testid={`node-modules-row-${rowKey}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                                    <Checkbox
+                                                        data-testid={`node-modules-checkbox-${rowKey}`}
+                                                        checked={selectedNamedPaths.has(hit.path)}
+                                                        onChange={e => toggleNamedPath(hit.path, e.target.checked)}
+                                                    >
+                                                        <Space size={4}>
+                                                            <span data-testid={`node-modules-path-${rowKey}`}>{hit.path}</span>
+                                                            <span data-testid={`node-modules-name-${rowKey}`}>{hit.name}</span>
+                                                            <span data-testid={`node-modules-repo-${rowKey}`}>{hit.repoName}</span>
+                                                        </Space>
+                                                    </Checkbox>
+                                                    <Text strong data-testid={`node-modules-size-${rowKey}`}>{hit.sizeHuman}</Text>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <Text type="secondary">Click Scan to find node_modules directories under ~</Text>
+                )}
+                {namedDone && namedHits.length === 0 && (
+                    <Text data-testid="node-modules-empty-state" type="secondary">No node_modules found under ~</Text>
+                )}
+            </Card>
+
+            <Modal
+                data-testid="node-modules-delete-confirm-modal"
+                title="Delete selected node_modules?"
+                open={namedDeleteModalOpen}
+                onCancel={() => setNamedDeleteModalOpen(false)}
+                footer={[
+                    <Button key="cancel" onClick={() => setNamedDeleteModalOpen(false)}>Cancel</Button>,
+                    <Button
+                        key="confirm"
+                        data-testid="node-modules-delete-confirm-btn"
+                        type="primary"
+                        danger
+                        loading={namedDeleting}
+                        onClick={confirmDeleteNamed}
+                    >
+                        Delete
+                    </Button>,
+                ]}
+            >
+                <Text>
+                    Delete {selectedNamedPaths.size} selected directory(s), freeing {formatBytes(selectedNamedTotal)}?
+                </Text>
+            </Modal>
+
+            <Card data-testid="vendor-section" size="small" style={{ marginBottom: '16px' }}
+                title={
+                    <Space>
+                        <span>vendor</span>
+                        <span data-testid="vendor-running-total" style={{ color: '#888' }}>
+                            ({formatBytes(vendorRunningTotal)})
+                        </span>
+                        {vendorScanning && (
+                            <span data-testid="vendor-scanning-badge"><SyncOutlined spin style={{ color: '#1677ff' }} /></span>
+                        )}
+                        {vendorDone && !vendorScanning && (
+                            <span data-testid="vendor-done-badge"><CheckCircleOutlined style={{ color: '#52c41a' }} /></span>
+                        )}
+                    </Space>
+                }
+                extra={
+                    <Space>
+                        <Checkbox
+                            data-testid="vendor-show-under-1m"
+                            checked={showVendorUnder1M}
+                            onChange={e => setShowVendorUnder1M(e.target.checked)}
+                        >
+                            &lt;1M
+                        </Checkbox>
+                        <Button
+                            data-testid="vendor-scan-btn"
+                            size="small"
+                            type="primary"
+                            icon={<PlayCircleOutlined />}
+                            onClick={startVendorScan}
+                            style={{ display: vendorScanning ? 'none' : undefined }}
+                        >
+                            Scan
+                        </Button>
+                        <Button
+                            data-testid="vendor-stop-btn"
+                            size="small"
+                            danger
+                            icon={<StopOutlined />}
+                            onClick={stopVendorScan}
+                            disabled={!vendorScanning}
+                        >
+                            Stop
+                        </Button>
+                    </Space>
+                }
+            >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <Text data-testid="vendor-selected-total">
+                        Selected: {formatBytes(selectedVendorTotal)} to clear
+                    </Text>
+                    <Button
+                        data-testid="vendor-delete-btn"
+                        size="small"
+                        danger
+                        disabled={selectedVendorPaths.size === 0}
+                        onClick={() => setVendorDeleteModalOpen(true)}
+                    >
+                        Delete Selected
+                    </Button>
+                </div>
+                {vendorDeleteSuccess && (
+                    <Alert data-testid="vendor-delete-success" message="Selected vendor directories deleted" type="success" showIcon style={{ marginBottom: '12px' }} />
+                )}
+                {visibleVendorRepos.length > 0 || vendorScanning || vendorDone ? (
+                    <div data-testid="vendor-tree" style={{ width: '100%', textAlign: 'left' }}>
+                        {visibleVendorRepos.map(([repoPath, hits]) => {
+                            const repoKey = testIdKey(repoPath);
+                            const sortHits = sortNamedHits(hits);
+                            const repoSize = sortHits.reduce((sum, h) => sum + h.size, 0);
+                            const selectedInRepo = sortHits.filter(h => selectedVendorPaths.has(h.path)).length;
+                            const allSelected = selectedInRepo === sortHits.length;
+                            const someSelected = selectedInRepo > 0 && !allSelected;
+                            return (
+                                <div key={repoPath} style={{ marginBottom: '8px', textAlign: 'left' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                        <Checkbox
+                                            data-testid={`vendor-repo-checkbox-${repoKey}`}
+                                            checked={allSelected}
+                                            indeterminate={someSelected}
+                                            onChange={e => toggleVendorRepo(repoPath, e.target.checked)}
+                                        >
+                                            <span data-testid={`vendor-repo-row-${repoKey}`}>{repoPath}</span>
+                                        </Checkbox>
+                                        <Text strong>{formatBytes(repoSize)}</Text>
+                                    </div>
+                                    <div style={{ paddingLeft: '24px', textAlign: 'left' }}>
+                                        {sortHits.map(hit => {
+                                            const rowKey = testIdKey(hit.path);
+                                            return (
+                                                <div key={hit.path} data-testid={`vendor-row-${rowKey}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                                    <Checkbox
+                                                        data-testid={`vendor-checkbox-${rowKey}`}
+                                                        checked={selectedVendorPaths.has(hit.path)}
+                                                        onChange={e => toggleVendorPath(hit.path, e.target.checked)}
+                                                    >
+                                                        <Space size={4}>
+                                                            <span data-testid={`vendor-path-${rowKey}`}>{hit.path}</span>
+                                                            <span data-testid={`vendor-name-${rowKey}`}>{hit.name}</span>
+                                                            <span data-testid={`vendor-repo-${rowKey}`}>{hit.repoName}</span>
+                                                        </Space>
+                                                    </Checkbox>
+                                                    <Text strong data-testid={`vendor-size-${rowKey}`}>{hit.sizeHuman}</Text>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <Text type="secondary">Click Scan to find vendor directories under ~</Text>
+                )}
+                {vendorDone && vendorHits.length === 0 && (
+                    <Text data-testid="vendor-empty-state" type="secondary">No vendor directories found under ~</Text>
+                )}
+            </Card>
+
+            <Modal
+                data-testid="vendor-delete-confirm-modal"
+                title="Delete selected vendor directories?"
+                open={vendorDeleteModalOpen}
+                onCancel={() => setVendorDeleteModalOpen(false)}
+                footer={[
+                    <Button key="cancel" onClick={() => setVendorDeleteModalOpen(false)}>Cancel</Button>,
+                    <Button
+                        key="confirm"
+                        data-testid="vendor-delete-confirm-btn"
+                        type="primary"
+                        danger
+                        loading={vendorDeleting}
+                        onClick={confirmDeleteVendor}
+                    >
+                        Delete
+                    </Button>,
+                ]}
+            >
+                <Text>
+                    Delete {selectedVendorPaths.size} selected directory(s), freeing {formatBytes(selectedVendorTotal)}?
+                </Text>
+            </Modal>
 
             <Modal
                 data-testid="binary-delete-confirm-modal"

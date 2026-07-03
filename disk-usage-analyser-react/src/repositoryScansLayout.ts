@@ -89,3 +89,45 @@ export function filterBinaryRepos(
 
     return filtered;
 }
+
+export interface NamedHit {
+    path: string;
+    name: string;
+    size: number;
+    sizeHuman: string;
+    repoPath: string;
+    repoName: string;
+}
+
+export function sortNamedRepos(byRepo: Map<string, NamedHit[]>): [string, NamedHit[]][] {
+    const entries = Array.from(byRepo.entries()).map(([repoPath, hits]) => {
+        const sortedHits = [...hits].sort((a, b) => b.size - a.size);
+        const total = sortedHits.reduce((sum, hit) => sum + hit.size, 0);
+        return { repoPath, hits: sortedHits, total };
+    });
+    entries.sort((a, b) => b.total - a.total);
+    return entries.map(({ repoPath, hits }) => [repoPath, hits]);
+}
+
+export function sortNamedHits(hits: NamedHit[]): NamedHit[] {
+    return [...hits].sort((a, b) => b.size - a.size);
+}
+
+export function filterNamedRepos(
+    byRepo: Map<string, NamedHit[]>,
+    showUnder1M: boolean,
+): Map<string, NamedHit[]> {
+    const filtered = new Map<string, NamedHit[]>();
+
+    for (const [repoPath, hits] of byRepo.entries()) {
+        const visibleHits = showUnder1M
+            ? [...hits]
+            : hits.filter(hit => hit.size >= ONE_MIB);
+
+        if (showUnder1M || visibleHits.reduce((sum, hit) => sum + hit.size, 0) >= ONE_MIB) {
+            filtered.set(repoPath, visibleHits);
+        }
+    }
+
+    return filtered;
+}

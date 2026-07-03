@@ -21,10 +21,15 @@ discovered git repository, **binary discovery** walks regular files,
 skips `.git` and ignored directories, uses `detect.DetectFileType`, and gives
 `debug/buildinfo.ReadFile` precedence over file magic so Go binaries classify as
 `go` even when their container is Mach-O or ELF. **BinaryHit** records path,
-size, human size, kind, type description, repo path, and repo name. **ScanResult**
-aggregates roots, repo count, hits, and totals. The CLI streams one human or
-NDJSON line per hit immediately, flushes after each hit, then prints the summary
-line `Found N binaries, total <human-size>`.
+size, human size, kind, type description, repo path, and repo name. **Named-hit
+detection** uses a repeatable `--name=NAME` flag; when a directory basename
+matches, it computes the recursive size (skipping nested same-name subdirs),
+reports a **NamedHit**, and skips the subtree. When a regular file basename
+matches, it reports the file's direct size. Named hits and binary hits are
+additive in a single scan. **ScanResult** aggregates roots, repo count, binary
+hits, named hits, and totals. The CLI streams one human or NDJSON line per hit
+immediately, flushes after each hit, then prints the summary line
+`Found N binaries, M named entries, total <human-size>`.
 
 ## Decision Tree
 
@@ -51,11 +56,28 @@ tmp-files-scan/
 │   ├── go-binary/             # buildinfo hit takes Kind=go precedence
 │   ├── elf-binary/            # ELF binary hit
 │   └── skip-text-files/       # .go and .txt files are not hits
-└── output/
-    ├── human-output/          # default streaming human format
-    ├── json-output/           # --json NDJSON hit lines plus text summary
-    ├── streaming/             # first Write is a hit, not buffered summary
-    └── tilde-paths/           # home-relative paths use ~/...
+├── output/
+│   ├── human-output/          # default streaming human format
+│   ├── json-output/           # --json NDJSON hit lines plus text summary
+│   ├── streaming/             # first Write is a hit, not buffered summary
+│   └── tilde-paths/           # home-relative paths use ~/...
+└── named/
+    ├── match-dir/
+    │   ├── single/
+    │   │   ├── basic/              # single dir match, human output, correct size
+    │   │   ├── nested/             # nested dirs produce separate hits
+    │   │   ├── override-ignore/    # --name overrides ignoredDirBasenames
+    │   │   ├── additive/           # named dir + binary in same scan
+    │   │   ├── json/               # --json NDJSON with type:named
+    │   │   ├── size-accuracy/      # recursive size matches expected
+    │   │   └── custom-root/        # --root limits named search scope
+    │   └── multiple/
+    │       ├── both-found/         # two names both found in same repo
+    │       └── mixed-ignore/       # named ok, non-named ignored dir still skipped
+    ├── match-file/
+    │   └── basic/                  # regular file matches --name
+    ├── no-matches/                 # nothing matches --name
+    └── no-repos/                   # no git repos at all
 ```
 
 ## Test Index
@@ -83,6 +105,18 @@ tmp-files-scan/
 | output/json-output | `--json` emits valid NDJSON hit objects followed by the text summary. |
 | output/streaming | The first stdout write contains a hit line before the final summary is written. |
 | output/tilde-paths | All home-contained paths are rendered with a `~/` prefix. |
+| named/match-dir/single/basic | Single `node_modules` dir reported with path, size, repo metadata. |
+| named/match-dir/single/nested | Nested `node_modules` dirs produce two separate hits with correct size exclusion. |
+| named/match-dir/single/override-ignore | `--name=node_modules` overrides `ignoredDirBasenames` to report the dir. |
+| named/match-dir/single/additive | Repo with `node_modules` + Mach-O binary reports both hits. |
+| named/match-dir/single/json | `--json` emits NDJSON with `"type":"named"` for named hits. |
+| named/match-dir/single/size-accuracy | Recursive size of known file contents matches expected value. |
+| named/match-dir/single/custom-root | `--root` limits named dir search to selected subtree. |
+| named/match-dir/multiple/both-found | `--name=node_modules --name=vendor` finds both in same repo. |
+| named/match-dir/multiple/mixed-ignore | `--name=node_modules` reports it; `vendor` (not named) is still skipped. |
+| named/match-file/basic | Regular file named `node_modules` is reported as a named hit. |
+| named/no-matches | `--name=nonexistent` produces zero named hits and a zero summary. |
+| named/no-repos | Root with no `.git` dirs produces zero named hits with `--name`.
 
 ## How to Run
 

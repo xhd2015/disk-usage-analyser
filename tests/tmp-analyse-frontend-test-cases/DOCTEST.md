@@ -2,7 +2,8 @@
 
 UI tests for the tmp-analyse page: structure, navigation, scan interaction, breakdown
 display, runtime stats sections, live breakdown progress, and Repository Scans
-(worktrees + binaries sections with independent scan controls and delete UX).
+(worktrees, binaries, node_modules, and vendor sections with independent scan
+controls, filter/sort/select/delete UX).
 
 ## Version
 
@@ -17,9 +18,11 @@ When each location completes, a **location** event finalizes sizes and may attac
 **runtimeItems** for Docker/Podman, and **vmInternal** for Podman VM storage on macOS.
 The page renders cards with **data-testid** hooks for headings, summary bar, breakdown
 table rows, vm-internal section rows, runtime section rows, and scan badges.
-Tests drive the page through **playwright-debug** scripts against a locally started
-Go dev server. Repository Scans leaves use `ui-automation` and `slow` labels when
-they depend on completing a subsection scan.
+Repository Scans sections (worktrees, binaries, node_modules, vendor) each have
+independent scan buttons, SSE event streams, and delete endpoints. Tests drive the
+page through **playwright-debug** scripts against a locally started Go dev server.
+Repository Scans leaves use `ui-automation` and `slow` labels when they depend on
+completing a subsection scan.
 
 ## Test Tree
 
@@ -40,7 +43,8 @@ tmp-analyse-frontend-test-cases/
 │   ├── left-aligned/
 │   ├── filter-under-10m-default/
 │   ├── filter-show-under-10m/
-│   └── sort-by-size-desc/
+│   ├── sort-by-size-desc/
+│   └── running-total/
 ├── worktrees-live-stream/
 ├── binaries-section/
 │   ├── after-scan/
@@ -50,7 +54,22 @@ tmp-analyse-frontend-test-cases/
 │   ├── sort-by-size-desc/
 │   ├── select-and-total/
 │   ├── delete-selected/
-│   └── repo-select-all/
+│   ├── repo-select-all/
+│   └── running-total/
+├── named-section/
+│   ├── after-scan/
+│   ├── left-aligned/
+│   ├── filter-under-1m-default/
+│   ├── filter-show-under-1m/
+│   ├── sort-by-size-desc/
+│   ├── select-and-total/
+│   ├── delete-selected/
+│   ├── repo-select-all/
+│   └── running-total/
+├── vendor-section/
+│   ├── after-scan/
+│   └── running-total/
+├── named-independent-scans/
 └── independent-scan-controls/
 ```
 
@@ -69,6 +88,7 @@ tmp-analyse-frontend-test-cases/
 | worktrees-section/filter-under-10m-default | worktrees-filter-under-10m-default.js |
 | worktrees-section/filter-show-under-10m | worktrees-filter-show-under-10m.js |
 | worktrees-section/sort-by-size-desc | worktrees-sort-by-size-desc.js |
+| worktrees-section/running-total | worktrees-running-total.js |
 | worktrees-live-stream | worktrees-live-stream.js |
 | binaries-section/after-scan | binaries-after-scan.js |
 | binaries-section/left-aligned | binaries-left-aligned.js |
@@ -78,6 +98,19 @@ tmp-analyse-frontend-test-cases/
 | binaries-section/select-and-total | binaries-select-total.js |
 | binaries-section/delete-selected | binaries-delete-selected.js |
 | binaries-section/repo-select-all | binaries-repo-select-all.js |
+| binaries-section/running-total | binaries-running-total.js |
+| named-section/after-scan | named-after-scan.js |
+| named-section/left-aligned | named-left-aligned.js |
+| named-section/filter-under-1m-default | named-filter-under-1m-default.js |
+| named-section/filter-show-under-1m | named-filter-show-under-1m.js |
+| named-section/sort-by-size-desc | named-sort-by-size-desc.js |
+| named-section/select-and-total | named-select-total.js |
+| named-section/delete-selected | named-delete-selected.js |
+| named-section/repo-select-all | named-repo-select-all.js |
+| named-section/running-total | node-modules-running-total.js |
+| vendor-section/after-scan | vendor-after-scan.js |
+| vendor-section/running-total | vendor-running-total.js |
+| named-independent-scans | named-independent-scans.js |
 | independent-scan-controls | independent-scan-controls.js |
 
 ## How to Run

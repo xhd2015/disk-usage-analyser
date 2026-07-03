@@ -27,10 +27,20 @@ type BinaryHit struct {
 	RepoName  string `json:"repoName"`
 }
 
+type NamedHit struct {
+	Path      string `json:"path"`
+	Name      string `json:"name"`
+	Size      int64  `json:"size"`
+	SizeHuman string `json:"sizeHuman"`
+	RepoPath  string `json:"repoPath"`
+	RepoName  string `json:"repoName"`
+}
+
 type ScanResult struct {
 	Roots      []string
 	Repos      int
 	Binaries   []BinaryHit
+	NamedHits  []NamedHit
 	TotalSize  int64
 	TotalHuman string
 }
@@ -46,12 +56,14 @@ type scanOptions struct {
 	maxDepth int
 	json     bool
 	verbose  bool
+	names    []string
 }
 
 const help = `Usage: disk-usage-analyser tmp-files scan [OPTIONS]
 
 Options:
   --go-binaries     Scan for Go, Mach-O, and ELF binaries
+  --name NAME       Scan for entries whose basename matches NAME (repeatable)
   --root PATH       Root directory to scan (repeatable; default ~)
   --max-depth N     Repo discovery depth (0 = unlimited)
   --json            Emit one JSON object per hit
@@ -107,10 +119,20 @@ func parseScanArgs(args []string, homeDir string) (scanOptions, bool, error) {
 	var opts scanOptions
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
+		if name, ok := extractNameValue(arg); ok {
+			opts.names = append(opts.names, name)
+			continue
+		}
 		switch arg {
 		case "-h", "--help":
 			return opts, true, nil
 		case "--go-binaries":
+		case "--name":
+			if i+1 >= len(args) {
+				return opts, false, fmt.Errorf("--name requires a value")
+			}
+			i++
+			opts.names = append(opts.names, args[i])
 		case "--json":
 			opts.json = true
 		case "-v", "--verbose":
@@ -154,17 +176,20 @@ func parseScanArgs(args []string, homeDir string) (scanOptions, bool, error) {
 
 // ScanOptions configures a binary scan under git repositories.
 type ScanOptions struct {
-	Roots    []string
-	MaxDepth int
-	Verbose  bool
-	Stderr   io.Writer
-	OnRepo   func(repo scan_repo.Repo) error
+	Roots         []string
+	MaxDepth      int
+	Verbose       bool
+	Stderr        io.Writer
+	Names         []string
+	OnRepo        func(repo scan_repo.Repo) error
+	OnNamedHit    func(hit NamedHit, repo scan_repo.Repo) error
 }
 
 // BinaryScanSummary holds aggregate binary scan results.
 type BinaryScanSummary struct {
 	Repos       int
 	Binaries    int
+	NamedHits   int
 	TotalSize   int64
 	TotalHuman  string
 }
@@ -174,14 +199,22 @@ type BinaryHitCallback func(hit BinaryHit, repo scan_repo.Repo) error
 
 // ScanBinaries discovers git repos and classifies binaries, invoking onHit for each match.
 func ScanBinaries(ctx context.Context, opts ScanOptions, homeDir string, onHit BinaryHitCallback) (BinaryScanSummary, error) {
+	namesSet := makeNameSet(opts.Names)
 	summary := BinaryScanSummary{}
 	processRepo := func(repo scan_repo.Repo) error {
 		summary.Repos++
-		if err := scanRepoFiles(ctx, repo, homeDir, opts.Verbose, opts.Stderr, func(hit BinaryHit) error {
+		if err := scanRepoFiles(ctx, repo, homeDir, namesSet, opts.Verbose, opts.Stderr, func(hit BinaryHit) error {
 			summary.Binaries++
 			summary.TotalSize += hit.Size
 			if onHit != nil {
 				return onHit(hit, repo)
+			}
+			return nil
+		}, func(hit NamedHit) error {
+			summary.NamedHits++
+			summary.TotalSize += hit.Size
+			if opts.OnNamedHit != nil {
+				return opts.OnNamedHit(hit, repo)
 			}
 			return nil
 		}); err != nil {
@@ -214,9 +247,24 @@ func runScan(ctx context.Context, opts scanOptions, homeDir string, stdout, stde
 		MaxDepth: opts.maxDepth,
 		Verbose:  opts.verbose,
 		Stderr:   stderr,
+		Names:    opts.names,
 	}
 	var result ScanResult
 	result.Roots = opts.roots
+	scanOpts.OnNamedHit = func(hit NamedHit, _ scan_repo.Repo) error {
+		result.NamedHits = append(result.NamedHits, hit)
+		result.TotalSize += hit.Size
+		if opts.json {
+			if err := writeJSONNamedHit(stdout, hit); err != nil {
+				return err
+			}
+		} else {
+			if _, err := fmt.Fprintf(stdout, "%s  name:%-5s  %s  (repo: %s)\n", hit.SizeHuman, hit.Name, hit.Path, hit.RepoPath); err != nil {
+				return err
+			}
+		}
+		return flush(stdout)
+	}
 	summary, err := ScanBinaries(ctx, scanOpts, homeDir, func(hit BinaryHit, _ scan_repo.Repo) error {
 		result.Binaries = append(result.Binaries, hit)
 		result.TotalSize += hit.Size
@@ -236,13 +284,19 @@ func runScan(ctx context.Context, opts scanOptions, homeDir string, stdout, stde
 	}
 	result.Repos = summary.Repos
 	result.TotalHuman = summary.TotalHuman
-	if _, err := fmt.Fprintf(stdout, "Found %d binaries, total %s\n", len(result.Binaries), result.TotalHuman); err != nil {
-		return &result, err
+	if len(opts.names) > 0 {
+		if _, err := fmt.Fprintf(stdout, "Found %d binaries, %d named entries, total %s\n", len(result.Binaries), len(result.NamedHits), result.TotalHuman); err != nil {
+			return &result, err
+		}
+	} else {
+		if _, err := fmt.Fprintf(stdout, "Found %d binaries, total %s\n", len(result.Binaries), result.TotalHuman); err != nil {
+			return &result, err
+		}
 	}
 	return &result, flush(stdout)
 }
 
-func scanRepoFiles(ctx context.Context, repo scan_repo.Repo, homeDir string, verbose bool, stderr io.Writer, onHit func(BinaryHit) error) error {
+func scanRepoFiles(ctx context.Context, repo scan_repo.Repo, homeDir string, names map[string]bool, verbose bool, stderr io.Writer, onHit func(BinaryHit) error, onNamedHit func(NamedHit) error) error {
 	return filepath.WalkDir(repo.Path, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			if os.IsPermission(walkErr) {
@@ -259,6 +313,32 @@ func scanRepoFiles(ctx context.Context, repo scan_repo.Repo, homeDir string, ver
 
 		if d.IsDir() {
 			if path != repo.Path {
+				if len(names) > 0 && names[d.Name()] {
+					size, innerHits, err := computeNamedDirSize(path, names)
+					if err != nil {
+						return err
+					}
+					for _, ih := range innerHits {
+						ih.Path = DisplayPath(ih.Path, homeDir)
+						ih.RepoPath = DisplayPath(repo.Path, homeDir)
+						ih.RepoName = repo.Name
+						if err := onNamedHit(ih); err != nil {
+							return err
+						}
+					}
+					hit := NamedHit{
+						Path:      DisplayPath(path, homeDir),
+						Name:      d.Name(),
+						Size:      size,
+						SizeHuman: FormatHumanSize(size),
+						RepoPath:  DisplayPath(repo.Path, homeDir),
+						RepoName:  repo.Name,
+					}
+					if err := onNamedHit(hit); err != nil {
+						return err
+					}
+					return filepath.SkipDir
+				}
 				if _, ok := ignoredDirBasenames[d.Name()]; ok {
 					return filepath.SkipDir
 				}
@@ -281,6 +361,18 @@ func scanRepoFiles(ctx context.Context, repo scan_repo.Repo, homeDir string, ver
 		}
 		if !info.Mode().IsRegular() {
 			return nil
+		}
+
+		if len(names) > 0 && names[d.Name()] {
+			hit := NamedHit{
+				Path:      DisplayPath(path, homeDir),
+				Name:      d.Name(),
+				Size:      info.Size(),
+				SizeHuman: FormatHumanSize(info.Size()),
+				RepoPath:  DisplayPath(repo.Path, homeDir),
+				RepoName:  repo.Name,
+			}
+			return onNamedHit(hit)
 		}
 
 		hit, ok := ClassifyFile(path, info.Size(), repo, homeDir)
@@ -405,4 +497,94 @@ func FormatHumanSize(size int64) string {
 		}
 	}
 	return fmt.Sprintf("%.1f EB", value/1024)
+}
+
+func extractNameValue(arg string) (string, bool) {
+	if strings.HasPrefix(arg, "--name=") {
+		val := arg[len("--name="):]
+		if val == "" {
+			return "", false
+		}
+		return val, true
+	}
+	return "", false
+}
+
+func makeNameSet(names []string) map[string]bool {
+	if len(names) == 0 {
+		return nil
+	}
+	set := make(map[string]bool, len(names))
+	for _, n := range names {
+		set[n] = true
+	}
+	return set
+}
+
+func computeNamedDirSize(path string, names map[string]bool) (size int64, innerHits []NamedHit, err error) {
+	var total int64
+	var hits []NamedHit
+	err = filepath.WalkDir(path, func(p string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			if os.IsPermission(walkErr) {
+				return filepath.SkipDir
+			}
+			return walkErr
+		}
+		if p == path {
+			return nil
+		}
+		if d.IsDir() && names != nil && names[d.Name()] {
+			innerSize, innerInner, innerErr := computeNamedDirSize(p, names)
+			if innerErr != nil {
+				return innerErr
+			}
+			hits = append(hits, innerInner...)
+			hits = append(hits, NamedHit{Path: p, Name: d.Name(), Size: innerSize, SizeHuman: FormatHumanSize(innerSize)})
+			return filepath.SkipDir
+		}
+		if !d.Type().IsRegular() {
+			return nil
+		}
+		info, infoErr := d.Info()
+		if infoErr != nil {
+			return nil
+		}
+		total += info.Size()
+		return nil
+	})
+	return total, hits, err
+}
+
+func computeDirSize(path string, names map[string]bool) (int64, error) {
+	size, _, err := computeNamedDirSize(path, names)
+	return size, err
+}
+
+func writeJSONNamedHit(w io.Writer, hit NamedHit) error {
+	type namedHitJSON struct {
+		Type      string `json:"type"`
+		Path      string `json:"path"`
+		Name      string `json:"name"`
+		Size      int64  `json:"size"`
+		SizeHuman string `json:"sizeHuman"`
+		RepoPath  string `json:"repoPath"`
+		RepoName  string `json:"repoName"`
+	}
+	data, err := json.Marshal(namedHitJSON{
+		Type:      "named",
+		Path:      hit.Path,
+		Name:      hit.Name,
+		Size:      hit.Size,
+		SizeHuman: hit.SizeHuman,
+		RepoPath:  hit.RepoPath,
+		RepoName:  hit.RepoName,
+	})
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(append(data, '\n')); err != nil {
+		return err
+	}
+	return nil
 }
