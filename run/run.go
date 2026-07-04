@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"disk-usage-analyser/analyse"
 	"disk-usage-analyser/server"
 	"disk-usage-analyser/tmpfiles"
 
@@ -19,6 +20,7 @@ const help = `
 Usage: disk-usage-analyser <subcommand>
 
 Subcommands:
+  analyse [DIR]     Analyse directory tree size and link metrics
   tmp-files scan    Scan temporary file candidates
 `
 
@@ -47,6 +49,20 @@ func RunWithOptions(ctx context.Context, args []string, opts Options) error {
 	stderr := opts.Stderr
 	if stderr == nil {
 		stderr = os.Stderr
+	}
+
+	if len(args) > 0 && args[0] == "analyse" {
+		exitCode, err := analyse.RunCLI(args[1:], analyse.CLIOptions{
+			Stdout: stdout,
+			Stderr: stderr,
+		})
+		if err != nil {
+			return err
+		}
+		if exitCode != 0 {
+			return fmt.Errorf("analyse exited with code %d", exitCode)
+		}
+		return nil
 	}
 
 	if len(args) > 0 && args[0] == "tmp-files" {
