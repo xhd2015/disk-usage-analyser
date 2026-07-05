@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
 
+	"github.com/xhd2015/dot-pkgs/go-pkgs/npm"
 	"github.com/xhd2015/xgo/support/cmd"
 )
+
+const reactDir = "disk-usage-analyser-react"
 
 func main() {
 	err := Handle(os.Args[1:])
@@ -17,23 +19,17 @@ func main() {
 }
 
 func Handle(args []string) error {
-	// check if bun installed
-	if _, err := exec.LookPath("bun"); err != nil {
-		return fmt.Errorf("bun is not installed, install it from https://bun.sh/docs/installation")
+	manager, err := npm.Resolve(reactDir, "auto")
+	if err != nil {
+		return err
 	}
 
-	// check if disk-usage-analyser-react/node_modules exists
-	if _, err := os.Stat("disk-usage-analyser-react/node_modules"); err != nil {
-		// run bun install
-		err := cmd.Debug().Dir("disk-usage-analyser-react").Run("bun", "install")
-		if err != nil {
+	if _, err := os.Stat(reactDir + "/node_modules"); err != nil {
+		name, installArgs := npm.InstallCommand(manager, npm.InstallOptions{})
+		if err := cmd.Debug().Dir(reactDir).Run(name, installArgs...); err != nil {
 			return err
 		}
 	}
 
-	err := cmd.Debug().Dir("disk-usage-analyser-react").Run("bun", "run", "build")
-	if err != nil {
-		return err
-	}
-	return nil
+	return cmd.Debug().Dir(reactDir).Run(string(manager), "run", "build")
 }
