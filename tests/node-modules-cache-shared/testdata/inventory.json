@@ -1,0 +1,26 @@
+{
+  "version": "1.0",
+  "node_modules": [
+    {
+      "path": "/tmp/nm-cache-shared-test/small/node_modules",
+      "has_package_json": true,
+      "package_manager": "bun",
+      "shared_size": "0B",
+      "total_size": "3.4MB"
+    },
+    {
+      "path": "/tmp/nm-cache-shared-test/large/node_modules",
+      "has_package_json": true,
+      "package_manager": "bun",
+      "shared_size": "71.1MB",
+      "total_size": "71.1MB"
+    },
+    {
+      "path": "/tmp/nm-cache-shared-test/huge/node_modules",
+      "has_package_json": true,
+      "package_manager": "npm",
+      "shared_size": "205.2MB",
+      "total_size": "867.9MB"
+    }
+  ]
+}

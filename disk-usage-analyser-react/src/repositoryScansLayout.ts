@@ -97,6 +97,16 @@ export interface NamedHit {
     sizeHuman: string;
     repoPath: string;
     repoName: string;
+    packageManager?: string;
+    hasPackageJson?: boolean;
+    gitTracked?: boolean;
+    pnpmSharedSize?: number;
+    pnpmSharedHuman?: string;
+    bunSharedSize?: number;
+    bunSharedHuman?: string;
+    sharedSize?: number;
+    sharedHuman?: string;
+    enrichmentStatus?: 'pending' | 'resolved';
 }
 
 export function sortNamedRepos(byRepo: Map<string, NamedHit[]>): [string, NamedHit[]][] {
@@ -125,6 +135,59 @@ export function filterNamedRepos(
             : hits.filter(hit => hit.size >= ONE_MIB);
 
         if (showUnder1M || visibleHits.reduce((sum, hit) => sum + hit.size, 0) >= ONE_MIB) {
+            filtered.set(repoPath, visibleHits);
+        }
+    }
+
+    return filtered;
+}
+
+export type TriStateFilter = 'all' | 'yes' | 'no';
+export type PmFilter = 'all' | 'npm' | 'pnpm' | 'yarn' | 'bun' | 'unknown';
+
+export interface NamedColumnFilters {
+    git: TriStateFilter;
+    packageJson: TriStateFilter;
+    pm: PmFilter;
+}
+
+export const defaultNamedColumnFilters: NamedColumnFilters = {
+    git: 'all',
+    packageJson: 'all',
+    pm: 'all',
+};
+
+function matchesTriState(value: boolean | undefined, filter: TriStateFilter): boolean {
+    if (filter === 'all') {
+        return true;
+    }
+    if (filter === 'yes') {
+        return value === true;
+    }
+    return value !== true;
+}
+
+function matchesPm(packageManager: string | undefined, filter: PmFilter): boolean {
+    if (filter === 'all') {
+        return true;
+    }
+    return (packageManager || 'unknown') === filter;
+}
+
+export function filterNamedReposByColumnFilters(
+    byRepo: Map<string, NamedHit[]>,
+    filters: NamedColumnFilters,
+): Map<string, NamedHit[]> {
+    const filtered = new Map<string, NamedHit[]>();
+
+    for (const [repoPath, hits] of byRepo.entries()) {
+        const visibleHits = hits.filter(hit =>
+            matchesTriState(hit.gitTracked, filters.git)
+            && matchesTriState(hit.hasPackageJson, filters.packageJson)
+            && matchesPm(hit.packageManager, filters.pm),
+        );
+
+        if (visibleHits.length > 0) {
             filtered.set(repoPath, visibleHits);
         }
     }

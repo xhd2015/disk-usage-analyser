@@ -5,11 +5,12 @@ package analyse
 import (
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 type bunSharedContext struct {
 	cacheIndex map[cloneGroupKey]struct{}
-	built      bool
+	once       sync.Once
 }
 
 func newBunSharedContext() *bunSharedContext {
@@ -20,10 +21,9 @@ func (c *bunSharedContext) bunSharedForNodeModules(nodeModulesPath string) int64
 	if c == nil {
 		return 0
 	}
-	if !c.built {
+	c.once.Do(func() {
 		c.cacheIndex = buildBunCacheIndex()
-		c.built = true
-	}
+	})
 	if len(c.cacheIndex) == 0 {
 		return 0
 	}

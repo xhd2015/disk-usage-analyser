@@ -1,0 +1,44 @@
+{
+  "filters": {
+    "git": "yes",
+    "packageJson": "all",
+    "pm": "npm"
+  },
+  "namedByRepo": {
+    "/repos/combo": [
+      {
+        "path": "/repos/combo/tracked-npm/node_modules",
+        "name": "node_modules",
+        "size": 2097152,
+        "sizeHuman": "2 MB",
+        "repoPath": "/repos/combo",
+        "repoName": "combo",
+        "gitTracked": true,
+        "hasPackageJson": true,
+        "packageManager": "npm"
+      },
+      {
+        "path": "/repos/combo/tracked-pnpm/node_modules",
+        "name": "node_modules",
+        "size": 2097152,
+        "sizeHuman": "2 MB",
+        "repoPath": "/repos/combo",
+        "repoName": "combo",
+        "gitTracked": true,
+        "hasPackageJson": true,
+        "packageManager": "pnpm"
+      },
+      {
+        "path": "/repos/combo/untracked-npm/node_modules",
+        "name": "node_modules",
+        "size": 2097152,
+        "sizeHuman": "2 MB",
+        "repoPath": "/repos/combo",
+        "repoName": "combo",
+        "gitTracked": false,
+        "hasPackageJson": true,
+        "packageManager": "npm"
+      }
+    ]
+  }
+}

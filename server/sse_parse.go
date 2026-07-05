@@ -85,10 +85,11 @@ func ParseWorktreesSSE(body string) (*WorktreesSSEResult, error) {
 
 // NamedSSEResult holds parsed tmp-named-scan SSE output.
 type NamedSSEResult struct {
-	SSEOutput  string
-	EventTypes []string
-	NamedHits  []NamedHit
-	Summary    *NamedScanSummary
+	SSEOutput       string
+	EventTypes      []string
+	NamedHits       []NamedHit
+	NamedEnriched   []NamedHit
+	Summary         *NamedScanSummary
 }
 
 // ParseNamedSSE parses SSE body from tmp-named-scan.
@@ -108,6 +109,11 @@ func ParseNamedSSE(body string) (*NamedSSEResult, error) {
 				var hit NamedHit
 				if err := json.Unmarshal([]byte(data), &hit); err == nil {
 					resp.NamedHits = append(resp.NamedHits, hit)
+				}
+			case "named_enriched":
+				var hit NamedHit
+				if err := json.Unmarshal([]byte(data), &hit); err == nil {
+					resp.NamedEnriched = append(resp.NamedEnriched, hit)
 				}
 			case "summary":
 				var summary NamedScanSummary

@@ -1,0 +1,55 @@
+{
+  "filters": {
+    "git": "all",
+    "packageJson": "all",
+    "pm": "all"
+  },
+  "namedByRepo": {
+    "/repos/alpha": [
+      {
+        "path": "/repos/alpha/node_modules",
+        "name": "node_modules",
+        "size": 2097152,
+        "sizeHuman": "2 MB",
+        "repoPath": "/repos/alpha",
+        "repoName": "alpha",
+        "gitTracked": true,
+        "hasPackageJson": true,
+        "packageManager": "npm"
+      },
+      {
+        "path": "/repos/alpha/packages/app/node_modules",
+        "name": "node_modules",
+        "size": 3145728,
+        "sizeHuman": "3 MB",
+        "repoPath": "/repos/alpha",
+        "repoName": "alpha",
+        "gitTracked": false,
+        "hasPackageJson": false,
+        "packageManager": "pnpm"
+      }
+    ],
+    "/repos/beta": [
+      {
+        "path": "/repos/beta/node_modules",
+        "name": "node_modules",
+        "size": 4194304,
+        "sizeHuman": "4 MB",
+        "repoPath": "/repos/beta",
+        "repoName": "beta",
+        "gitTracked": true,
+        "hasPackageJson": false,
+        "packageManager": "yarn"
+      },
+      {
+        "path": "/repos/beta/vendor/pkg/node_modules",
+        "name": "node_modules",
+        "size": 1048576,
+        "sizeHuman": "1 MB",
+        "repoPath": "/repos/beta",
+        "repoName": "beta",
+        "packageManager": "bun"
+      }
+    ]
+  }
+}

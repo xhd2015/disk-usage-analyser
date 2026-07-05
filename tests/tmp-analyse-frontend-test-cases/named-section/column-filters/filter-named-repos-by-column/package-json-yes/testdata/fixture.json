@@ -1,0 +1,40 @@
+{
+  "filters": {
+    "git": "all",
+    "packageJson": "yes",
+    "pm": "all"
+  },
+  "namedByRepo": {
+    "/repos/pkg": [
+      {
+        "path": "/repos/pkg/with/node_modules",
+        "name": "node_modules",
+        "size": 2097152,
+        "sizeHuman": "2 MB",
+        "repoPath": "/repos/pkg",
+        "repoName": "pkg",
+        "hasPackageJson": true,
+        "packageManager": "npm"
+      },
+      {
+        "path": "/repos/pkg/without/node_modules",
+        "name": "node_modules",
+        "size": 2097152,
+        "sizeHuman": "2 MB",
+        "repoPath": "/repos/pkg",
+        "repoName": "pkg",
+        "hasPackageJson": false,
+        "packageManager": "npm"
+      },
+      {
+        "path": "/repos/pkg/unknown/node_modules",
+        "name": "node_modules",
+        "size": 2097152,
+        "sizeHuman": "2 MB",
+        "repoPath": "/repos/pkg",
+        "repoName": "pkg",
+        "packageManager": "npm"
+      }
+    ]
+  }
+}

@@ -7,11 +7,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type pnpmSharedContext struct {
 	storeIndex map[cloneGroupKey]struct{}
-	built      bool
+	once       sync.Once
 }
 
 func newPnpmSharedContext() *pnpmSharedContext {
@@ -22,10 +23,9 @@ func (c *pnpmSharedContext) pnpmSharedForNodeModules(nodeModulesPath string) int
 	if c == nil {
 		return 0
 	}
-	if !c.built {
+	c.once.Do(func() {
 		c.storeIndex = buildPnpmStoreIndex()
-		c.built = true
-	}
+	})
 	if len(c.storeIndex) == 0 {
 		return 0
 	}

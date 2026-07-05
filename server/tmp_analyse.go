@@ -2,14 +2,17 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 )
 
 type TmpLocation struct {
@@ -463,11 +466,38 @@ func HandleTmpAnalyse(w http.ResponseWriter, r *http.Request) {
 	flusher.Flush()
 }
 
+func isSSEClientDisconnect(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET) {
+		return true
+	}
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		if errors.Is(opErr.Err, syscall.EPIPE) || errors.Is(opErr.Err, syscall.ECONNRESET) {
+			return true
+		}
+	}
+	var syscallErr *os.SyscallError
+	if errors.As(err, &syscallErr) {
+		if errors.Is(syscallErr.Err, syscall.EPIPE) || errors.Is(syscallErr.Err, syscall.ECONNRESET) {
+			return true
+		}
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "broken pipe") ||
+		strings.Contains(msg, "connection reset by peer") ||
+		strings.Contains(msg, "write on closed")
+}
+
 func sendSSEEvent(w http.ResponseWriter, event string, data interface{}) error {
 	jsonData, _ := json.Marshal(data)
 	_, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, jsonData)
 	if err != nil {
-		log.Printf("Error sending SSE event %s: %v", event, err)
+		if !isSSEClientDisconnect(err) {
+			log.Printf("Error sending SSE event %s: %v", event, err)
+		}
 		return err
 	}
 	return nil

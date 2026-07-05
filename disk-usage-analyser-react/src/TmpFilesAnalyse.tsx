@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
-import { Button, Card, Space, Typography, Row, Col, Tag, Collapse, Alert, Popover, Modal, Checkbox } from 'antd';
-import { PlayCircleOutlined, StopOutlined, SyncOutlined, CheckCircleOutlined, ClockCircleOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { useState, useRef, useEffect, type CSSProperties, type MouseEvent } from 'react';
+import { Button, Card, Space, Typography, Row, Col, Tag, Collapse, Alert, Popover, Modal, Checkbox, Tooltip } from 'antd';
+import { PlayCircleOutlined, StopOutlined, SyncOutlined, CheckCircleOutlined, ClockCircleOutlined, QuestionCircleOutlined, CopyOutlined, CodeOutlined } from '@ant-design/icons';
+import { PATH_VISIBLE_CHAR_LIMIT, truncatePathKeepSuffix } from './pathDisplay';
 import {
     filterBinaryRepos,
     filterWorktreeRepos,
@@ -8,10 +9,12 @@ import {
     sortLinkedWorktrees,
     sortWorktreeRepos,
     filterNamedRepos,
+    filterNamedReposByColumnFilters,
+    defaultNamedColumnFilters,
     sortNamedRepos,
     sortNamedHits,
 } from './repositoryScansLayout';
-import type { NamedHit } from './repositoryScansLayout';
+import type { NamedColumnFilters, NamedHit } from './repositoryScansLayout';
 
 const { Text } = Typography;
 
@@ -214,6 +217,109 @@ function testIdKey(value: string): string {
     return value.replace(/[^a-zA-Z0-9._-]/g, '_');
 }
 
+const nodeModulesGridColumns = '24px minmax(0, 1fr) 40px 40px 72px 72px 72px';
+
+const truncatedPathStyle: CSSProperties = {
+    overflow: 'hidden',
+    whiteSpace: 'nowrap',
+    display: 'inline-block',
+    maxWidth: '100%',
+    verticalAlign: 'bottom',
+};
+
+function pathCopyTestId(testId: string): string {
+    if (testId.startsWith('node-modules-path-')) {
+        return testId.replace('node-modules-path-', 'node-modules-path-copy-');
+    }
+    if (testId.startsWith('node-modules-repo-row-')) {
+        return testId.replace('node-modules-repo-row-', 'node-modules-repo-path-copy-');
+    }
+    return `node-modules-path-copy-${testId}`;
+}
+
+async function openPathInIterm2(path: string): Promise<void> {
+    const res = await fetch('/api/open-iterm2', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+    });
+    if (!res.ok) {
+        let message = `HTTP ${res.status}`;
+        try {
+            const data = await res.json() as { error?: string };
+            if (data.error) message = data.error;
+        } catch {
+            // ignore parse errors
+        }
+        throw new Error(message);
+    }
+}
+
+function TruncatedPath({ path, testId, showIterm2 = false }: { path: string; testId: string; showIterm2?: boolean }) {
+    const displayPath = truncatePathKeepSuffix(path, PATH_VISIBLE_CHAR_LIMIT);
+    const copyTestId = pathCopyTestId(testId);
+    const iterm2TestId = copyTestId.replace('-copy-', '-iterm2-');
+
+    const handleCopy = (event: MouseEvent<HTMLElement>) => {
+        event.stopPropagation();
+        void navigator.clipboard.writeText(path);
+    };
+
+    const handleOpenIterm2 = (event: MouseEvent<HTMLElement>) => {
+        event.stopPropagation();
+        void openPathInIterm2(path).catch(err => {
+            console.error('Open in iTerm2 failed:', err);
+        });
+    };
+
+    return (
+        <Tooltip
+            title={(
+                <div style={{ maxWidth: 480 }}>
+                    <div style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-all', marginBottom: 8 }}>
+                        {path}
+                    </div>
+                    <Space size={8}>
+                        <Button
+                            type="primary"
+                            size="small"
+                            icon={<CopyOutlined />}
+                            data-testid={copyTestId}
+                            onClick={handleCopy}
+                        >
+                            Copy
+                        </Button>
+                        {showIterm2 && (
+                            <Button
+                                size="small"
+                                icon={<CodeOutlined />}
+                                data-testid={iterm2TestId}
+                                onClick={handleOpenIterm2}
+                            >
+                                Open in iTerm2
+                            </Button>
+                        )}
+                    </Space>
+                </div>
+            )}
+            mouseEnterDelay={0}
+            classNames={{ container: 'ant-tooltip-inner' }}
+        >
+            <span
+                data-testid={testId}
+                data-full-path={path}
+                style={{
+                    ...truncatedPathStyle,
+                    width: '100%',
+                    maxWidth: '100%',
+                }}
+            >
+                {displayPath}
+            </span>
+        </Tooltip>
+    );
+}
+
 function TmpFilesAnalyse() {
     const [scanning, setScanning] = useState(false);
     const [locations, setLocations] = useState<TmpLocation[]>([]);
@@ -243,8 +349,10 @@ function TmpFilesAnalyse() {
 
     const [namedScanning, setNamedScanning] = useState(false);
     const [namedDone, setNamedDone] = useState(false);
+    const [namedEnriching, setNamedEnriching] = useState(false);
     const [namedHits, setNamedHits] = useState<NamedHit[]>([]);
     const [showNamedUnder1M, setShowNamedUnder1M] = useState(false);
+    const [namedColumnFilters, setNamedColumnFilters] = useState<NamedColumnFilters>(defaultNamedColumnFilters);
     const [selectedNamedPaths, setSelectedNamedPaths] = useState<Set<string>>(new Set());
     const [namedDeleteModalOpen, setNamedDeleteModalOpen] = useState(false);
     const [namedDeleteSuccess, setNamedDeleteSuccess] = useState(false);
@@ -264,6 +372,7 @@ function TmpFilesAnalyse() {
     const [worktreeRunningTotal, setWorktreeRunningTotal] = useState(0);
     const [binaryRunningTotal, setBinaryRunningTotal] = useState(0);
     const [namedRunningTotal, setNamedRunningTotal] = useState(0);
+    const [sharedRunningTotal, setSharedRunningTotal] = useState(0);
     const [vendorRunningTotal, setVendorRunningTotal] = useState(0);
 
     useEffect(() => {
@@ -533,18 +642,98 @@ function TmpFilesAnalyse() {
         }
         setNamedScanning(true);
         setNamedDone(false);
+        setNamedEnriching(false);
         setNamedHits([]);
         setSelectedNamedPaths(new Set());
         setNamedDeleteSuccess(false);
         setNamedRunningTotal(0);
+        setSharedRunningTotal(0);
 
         const es = new EventSource('/api/tmp-named-scan?name=node_modules');
         namedESRef.current = es;
 
+        const upsertNamedHit = (hit: NamedHit) => {
+            setNamedHits(prev => {
+                const idx = prev.findIndex(h => h.path === hit.path);
+                if (idx >= 0) {
+                    const next = [...prev];
+                    const oldSize = next[idx].size;
+                    next[idx] = {
+                        ...next[idx],
+                        ...hit,
+                        enrichmentStatus: next[idx].enrichmentStatus ?? 'pending',
+                    };
+                    if (hit.size !== oldSize) {
+                        setNamedRunningTotal(total => total + (hit.size - oldSize));
+                    }
+                    return next;
+                }
+                setNamedRunningTotal(total => total + hit.size);
+                return [...prev, hit];
+            });
+        };
+
+        es.addEventListener('named_size', (e) => {
+            const sized = JSON.parse((e as MessageEvent).data) as {
+                path: string;
+                size: number;
+                sizeHuman: string;
+                hasPackageJson?: boolean;
+                gitTracked?: boolean;
+            };
+            upsertNamedHit({
+                path: sized.path,
+                name: 'node_modules',
+                size: sized.size,
+                sizeHuman: sized.sizeHuman,
+                hasPackageJson: sized.hasPackageJson,
+                gitTracked: sized.gitTracked,
+                repoPath: '',
+                repoName: '',
+                enrichmentStatus: 'pending',
+            });
+        });
+
         es.addEventListener('named', (e) => {
-            const hit: NamedHit = JSON.parse((e as MessageEvent).data);
-            setNamedHits(prev => [...prev, hit]);
-            setNamedRunningTotal(prev => prev + hit.size);
+            const hit: NamedHit = {
+                ...JSON.parse((e as MessageEvent).data),
+                enrichmentStatus: 'pending',
+            };
+            console.log(`[nm-scan] named path=${hit.path}`);
+            upsertNamedHit(hit);
+        });
+
+        es.addEventListener('scan_complete', () => {
+            setNamedScanning(false);
+            setNamedDone(true);
+            setNamedEnriching(true);
+        });
+
+        es.addEventListener('named_enriched', (e) => {
+            const enriched: NamedHit = JSON.parse((e as MessageEvent).data);
+            const sharedBytes = enriched.sharedSize ?? 0;
+            setSharedRunningTotal(prev => {
+                const runningTotal = prev + sharedBytes;
+                console.log(`[nm-scan] named_enriched path=${enriched.path} shared=${enriched.sharedHuman ?? '0 B'} runningTotal=${runningTotal}`);
+                return runningTotal;
+            });
+            setNamedHits(prev => prev.map(hit =>
+                hit.path === enriched.path
+                    ? {
+                        ...hit,
+                        packageManager: enriched.packageManager ?? hit.packageManager,
+                        hasPackageJson: enriched.hasPackageJson ?? hit.hasPackageJson,
+                        gitTracked: enriched.gitTracked ?? hit.gitTracked,
+                        pnpmSharedSize: enriched.pnpmSharedSize,
+                        pnpmSharedHuman: enriched.pnpmSharedHuman,
+                        bunSharedSize: enriched.bunSharedSize,
+                        bunSharedHuman: enriched.bunSharedHuman,
+                        sharedSize: enriched.sharedSize,
+                        sharedHuman: enriched.sharedHuman,
+                        enrichmentStatus: 'resolved',
+                    }
+                    : hit
+            ));
         });
 
         es.addEventListener('done', () => {
@@ -552,6 +741,7 @@ function TmpFilesAnalyse() {
             namedESRef.current = null;
             setNamedScanning(false);
             setNamedDone(true);
+            setNamedEnriching(false);
         });
 
         es.addEventListener('server_error', (e) => {
@@ -559,6 +749,7 @@ function TmpFilesAnalyse() {
             es.close();
             namedESRef.current = null;
             setNamedScanning(false);
+            setNamedEnriching(false);
         });
 
         es.onerror = () => {
@@ -566,6 +757,7 @@ function TmpFilesAnalyse() {
             es.close();
             namedESRef.current = null;
             setNamedScanning(false);
+            setNamedEnriching(false);
         };
     };
 
@@ -575,6 +767,7 @@ function TmpFilesAnalyse() {
             namedESRef.current = null;
         }
         setNamedScanning(false);
+        setNamedEnriching(false);
     };
 
     const toggleNamedPath = (path: string, checked: boolean) => {
@@ -646,11 +839,15 @@ function TmpFilesAnalyse() {
             setVendorRunningTotal(prev => prev + hit.size);
         });
 
+        es.addEventListener('scan_complete', () => {
+            setVendorScanning(false);
+            setVendorDone(true);
+        });
+
         es.addEventListener('done', () => {
             es.close();
             vendorESRef.current = null;
             setVendorScanning(false);
-            setVendorDone(true);
         });
 
         es.addEventListener('server_error', (e) => {
@@ -826,7 +1023,12 @@ function TmpFilesAnalyse() {
         return byRepo;
     })();
 
-    const filteredNamedByRepo = filterNamedRepos(namedByRepoRaw, showNamedUnder1M);
+    const namedSizeFiltered = (namedScanning || namedEnriching)
+        ? namedByRepoRaw
+        : filterNamedRepos(namedByRepoRaw, showNamedUnder1M);
+    const filteredNamedByRepo = (namedScanning || namedEnriching)
+        ? namedSizeFiltered
+        : filterNamedReposByColumnFilters(namedSizeFiltered, namedColumnFilters);
     const visibleNamedRepos = sortNamedRepos(filteredNamedByRepo);
 
     const filteredVendorByRepo = filterNamedRepos(vendorByRepoRaw, showVendorUnder1M);
@@ -1304,6 +1506,11 @@ function TmpFilesAnalyse() {
                         <span data-testid="node-modules-running-total" style={{ color: '#888' }}>
                             ({formatBytes(namedRunningTotal)})
                         </span>
+                        {(namedEnriching || sharedRunningTotal > 0) && (
+                            <span data-testid="node-modules-shared-running-total" style={{ color: '#888' }}>
+                                shared: {formatBytes(sharedRunningTotal)}
+                            </span>
+                        )}
                         {namedScanning && (
                             <span data-testid="node-modules-scanning-badge"><SyncOutlined spin style={{ color: '#1677ff' }} /></span>
                         )}
@@ -1337,7 +1544,7 @@ function TmpFilesAnalyse() {
                             danger
                             icon={<StopOutlined />}
                             onClick={stopNamedScan}
-                            disabled={!namedScanning}
+                            disabled={!namedScanning && !namedEnriching}
                         >
                             Stop
                         </Button>
@@ -1363,6 +1570,62 @@ function TmpFilesAnalyse() {
                 )}
                 {visibleNamedRepos.length > 0 || namedScanning || namedDone ? (
                     <div data-testid="node-modules-tree" style={{ width: '100%', textAlign: 'left' }}>
+                        {(namedHits.length > 0 || namedScanning) && (
+                            <div
+                                data-testid="node-modules-column-header"
+                                style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: nodeModulesGridColumns,
+                                    gap: 8,
+                                    alignItems: 'center',
+                                    marginBottom: '6px',
+                                    paddingLeft: '0',
+                                }}
+                            >
+                                <span />
+                                <Text type="secondary" style={{ fontSize: '11px' }}>Path</Text>
+                                <select
+                                    data-testid="node-modules-filter-package-json"
+                                    value={namedColumnFilters.packageJson}
+                                    onChange={e => setNamedColumnFilters(prev => ({ ...prev, packageJson: e.target.value as NamedColumnFilters['packageJson'] }))}
+                                    style={{ fontSize: '10px', width: '100%', maxWidth: '72px' }}
+                                >
+                                    <option value="all">All</option>
+                                    <option value="yes">Yes</option>
+                                    <option value="no">No</option>
+                                </select>
+                                <select
+                                    data-testid="node-modules-filter-git"
+                                    value={namedColumnFilters.git}
+                                    onChange={e => setNamedColumnFilters(prev => ({ ...prev, git: e.target.value as NamedColumnFilters['git'] }))}
+                                    style={{ fontSize: '10px', width: '100%', maxWidth: '72px' }}
+                                >
+                                    <option value="all">All</option>
+                                    <option value="yes">Yes</option>
+                                    <option value="no">No</option>
+                                </select>
+                                <select
+                                    data-testid="node-modules-filter-pm"
+                                    value={namedColumnFilters.pm}
+                                    onChange={e => setNamedColumnFilters(prev => ({ ...prev, pm: e.target.value as NamedColumnFilters['pm'] }))}
+                                    style={{ fontSize: '10px', width: '100%', maxWidth: '72px' }}
+                                >
+                                    <option value="all">All</option>
+                                    <option value="npm">npm</option>
+                                    <option value="pnpm">pnpm</option>
+                                    <option value="yarn">yarn</option>
+                                    <option value="bun">bun</option>
+                                    <option value="unknown">unknown</option>
+                                </select>
+                                <Space size={4}>
+                                    <Text type="secondary" style={{ fontSize: '11px' }}>Shared</Text>
+                                    {namedEnriching && (
+                                        <span data-testid="node-modules-enriching-badge"><SyncOutlined spin style={{ color: '#1677ff', fontSize: '11px' }} /></span>
+                                    )}
+                                </Space>
+                                <Text type="secondary" style={{ fontSize: '11px', textAlign: 'right' }}>Size</Text>
+                            </div>
+                        )}
                         {visibleNamedRepos.map(([repoPath, hits]) => {
                             const repoKey = testIdKey(repoPath);
                             const sortHits = sortNamedHits(hits);
@@ -1372,34 +1635,72 @@ function TmpFilesAnalyse() {
                             const someSelected = selectedInRepo > 0 && !allSelected;
                             return (
                                 <div key={repoPath} style={{ marginBottom: '8px', textAlign: 'left' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                    <div
+                                        style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: nodeModulesGridColumns,
+                                            gap: 8,
+                                            alignItems: 'center',
+                                            marginBottom: '4px',
+                                        }}
+                                    >
                                         <Checkbox
                                             data-testid={`node-modules-repo-checkbox-${repoKey}`}
                                             checked={allSelected}
                                             indeterminate={someSelected}
                                             onChange={e => toggleNamedRepo(repoPath, e.target.checked)}
-                                        >
-                                            <span data-testid={`node-modules-repo-row-${repoKey}`}>{repoPath}</span>
-                                        </Checkbox>
-                                        <Text strong>{formatBytes(repoSize)}</Text>
+                                        />
+                                        <TruncatedPath path={repoPath} testId={`node-modules-repo-row-${repoKey}`} showIterm2 />
+                                        <span />
+                                        <span />
+                                        <span />
+                                        <span />
+                                        <Text strong style={{ textAlign: 'right' }}>{formatBytes(repoSize)}</Text>
                                     </div>
-                                    <div style={{ paddingLeft: '24px', textAlign: 'left' }}>
+                                    <div style={{ paddingLeft: '0', textAlign: 'left' }}>
                                         {sortHits.map(hit => {
                                             const rowKey = testIdKey(hit.path);
                                             return (
-                                                <div key={hit.path} data-testid={`node-modules-row-${rowKey}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                                <div
+                                                    key={hit.path}
+                                                    data-testid={`node-modules-row-${rowKey}`}
+                                                    style={{
+                                                        display: 'grid',
+                                                        gridTemplateColumns: nodeModulesGridColumns,
+                                                        gap: 8,
+                                                        alignItems: 'center',
+                                                        marginBottom: '4px',
+                                                    }}
+                                                >
                                                     <Checkbox
                                                         data-testid={`node-modules-checkbox-${rowKey}`}
                                                         checked={selectedNamedPaths.has(hit.path)}
                                                         onChange={e => toggleNamedPath(hit.path, e.target.checked)}
-                                                    >
-                                                        <Space size={4}>
-                                                            <span data-testid={`node-modules-path-${rowKey}`}>{hit.path}</span>
-                                                            <span data-testid={`node-modules-name-${rowKey}`}>{hit.name}</span>
-                                                            <span data-testid={`node-modules-repo-${rowKey}`}>{hit.repoName}</span>
-                                                        </Space>
-                                                    </Checkbox>
-                                                    <Text strong data-testid={`node-modules-size-${rowKey}`}>{hit.sizeHuman}</Text>
+                                                    />
+                                                    <div style={{ minWidth: 0 }}>
+                                                        <TruncatedPath path={hit.path} testId={`node-modules-path-${rowKey}`} showIterm2 />
+                                                        <span data-testid={`node-modules-name-${rowKey}`} style={{ display: 'none' }}>{hit.name}</span>
+                                                        <span data-testid={`node-modules-repo-${rowKey}`} style={{ display: 'none' }}>{hit.repoName}</span>
+                                                    </div>
+                                                    <Checkbox
+                                                        data-testid={`node-modules-pkgjson-${rowKey}`}
+                                                        checked={!!hit.hasPackageJson}
+                                                        disabled
+                                                    />
+                                                    <Checkbox
+                                                        data-testid={`node-modules-git-${rowKey}`}
+                                                        checked={!!hit.gitTracked}
+                                                        disabled
+                                                    />
+                                                    <Text data-testid={`node-modules-pkgmgr-${rowKey}`} style={{ whiteSpace: 'nowrap' }}>{hit.packageManager || 'unknown'}</Text>
+                                                    {hit.enrichmentStatus === 'pending' ? (
+                                                        <span data-testid={`node-modules-shared-loading-${rowKey}`}>
+                                                            <SyncOutlined spin style={{ fontSize: '11px', color: '#1677ff' }} />
+                                                        </span>
+                                                    ) : (
+                                                        <Text data-testid={`node-modules-shared-${rowKey}`}>{hit.sharedHuman || '0 B'}</Text>
+                                                    )}
+                                                    <Text strong data-testid={`node-modules-size-${rowKey}`} style={{ textAlign: 'right' }}>{hit.sizeHuman}</Text>
                                                 </div>
                                             );
                                         })}

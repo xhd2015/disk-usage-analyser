@@ -65,7 +65,39 @@ tmp-analyse-frontend-test-cases/
 │   ├── select-and-total/
 │   ├── delete-selected/
 │   ├── repo-select-all/
-│   └── running-total/
+│   ├── running-total/
+│   ├── enrichment/
+│   │   ├── rows-before-shared/
+│   │   ├── per-row-shared-loading/
+│   │   ├── shared-accumulates-during-enrichment/
+│   │   └── first-row-timing/
+│   ├── table-columns/
+│   │   ├── after-scan/
+│   │   ├── full-width/
+│   │   ├── pm-no-wrap/
+│   │   ├── package-json-column/
+│   │   └── path-visible-limit/
+│   ├── path-truncation/
+│   │   ├── tooltip-full-path/
+│   │   ├── prefix-suffix-visible/
+│   │   ├── tooltip-copy-button/
+│   │   └── truncate-path-keep-suffix/
+│   │       ├── fits-within-limit/
+│   │       ├── truncates-with-prefix-ellipsis/
+│   │       └── prefers-slash-boundary/
+│   └── column-filters/
+│       ├── filter-named-repos-by-column/
+│       │   ├── defaults-show-all/
+│       │   ├── git-yes/
+│       │   ├── git-no/
+│       │   ├── package-json-yes/
+│       │   ├── package-json-no/
+│       │   ├── pm-pnpm/
+│       │   ├── pm-unknown/
+│       │   └── combined-filters/
+│       ├── controls-present/
+│       ├── git-no-hides-tracked/
+│       └── pm-filter-npm/
 ├── vendor-section/
 │   ├── after-scan/
 │   └── running-total/
@@ -108,6 +140,32 @@ tmp-analyse-frontend-test-cases/
 | named-section/delete-selected | named-delete-selected.js |
 | named-section/repo-select-all | named-repo-select-all.js |
 | named-section/running-total | node-modules-running-total.js |
+| named-section/enrichment/rows-before-shared | rows-before-shared.js |
+| named-section/enrichment/per-row-shared-loading | per-row-shared-loading.js |
+| named-section/enrichment/shared-accumulates-during-enrichment | shared-accumulates.js |
+| named-section/enrichment/first-row-timing | first-row-timing.js |
+| named-section/table-columns/after-scan | table-columns-after-scan.js |
+| named-section/table-columns/full-width | table-columns-full-width.js |
+| named-section/table-columns/pm-no-wrap | table-columns-pm-no-wrap.js |
+| named-section/table-columns/package-json-column | table-columns-package-json-column.js |
+| named-section/table-columns/path-visible-limit | path-visible-limit-harness.ts |
+| named-section/path-truncation/tooltip-full-path | path-truncation-tooltip.js |
+| named-section/path-truncation/prefix-suffix-visible | path-prefix-suffix-visible.js |
+| named-section/path-truncation/tooltip-copy-button | path-tooltip-copy-button.js |
+| named-section/path-truncation/truncate-path-keep-suffix/fits-within-limit | path-display-harness.ts |
+| named-section/path-truncation/truncate-path-keep-suffix/truncates-with-prefix-ellipsis | path-display-harness.ts |
+| named-section/path-truncation/truncate-path-keep-suffix/prefers-slash-boundary | path-display-harness.ts |
+| named-section/column-filters/filter-named-repos-by-column/defaults-show-all | column-filters-harness.ts |
+| named-section/column-filters/filter-named-repos-by-column/git-yes | column-filters-harness.ts |
+| named-section/column-filters/filter-named-repos-by-column/git-no | column-filters-harness.ts |
+| named-section/column-filters/filter-named-repos-by-column/package-json-yes | column-filters-harness.ts |
+| named-section/column-filters/filter-named-repos-by-column/package-json-no | column-filters-harness.ts |
+| named-section/column-filters/filter-named-repos-by-column/pm-pnpm | column-filters-harness.ts |
+| named-section/column-filters/filter-named-repos-by-column/pm-unknown | column-filters-harness.ts |
+| named-section/column-filters/filter-named-repos-by-column/combined-filters | column-filters-harness.ts |
+| named-section/column-filters/controls-present | column-filters-controls-present.js |
+| named-section/column-filters/git-no-hides-tracked | column-filters-git-no-hides-tracked.js |
+| named-section/column-filters/pm-filter-npm | column-filters-pm-filter-npm.js |
 | vendor-section/after-scan | vendor-after-scan.js |
 | vendor-section/running-total | vendor-running-total.js |
 | named-independent-scans | named-independent-scans.js |

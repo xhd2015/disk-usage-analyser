@@ -1,0 +1,4 @@
+{
+  "path": "/very/long/prefix/segment/that/should/be/hidden/acme/widget/node_modules",
+  "maxVisibleChars": 36
+}

@@ -1,0 +1,37 @@
+{
+  "filters": {
+    "git": "all",
+    "packageJson": "all",
+    "pm": "unknown"
+  },
+  "namedByRepo": {
+    "/repos/pm": [
+      {
+        "path": "/repos/pm/npm/node_modules",
+        "name": "node_modules",
+        "size": 2097152,
+        "sizeHuman": "2 MB",
+        "repoPath": "/repos/pm",
+        "repoName": "pm",
+        "packageManager": "npm"
+      },
+      {
+        "path": "/repos/pm/missing/node_modules",
+        "name": "node_modules",
+        "size": 2097152,
+        "sizeHuman": "2 MB",
+        "repoPath": "/repos/pm",
+        "repoName": "pm"
+      },
+      {
+        "path": "/repos/pm/empty/node_modules",
+        "name": "node_modules",
+        "size": 2097152,
+        "sizeHuman": "2 MB",
+        "repoPath": "/repos/pm",
+        "repoName": "pm",
+        "packageManager": ""
+      }
+    ]
+  }
+}

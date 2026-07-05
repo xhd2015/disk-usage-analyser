@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/xhd2015/dot-pkgs/go-pkgs/file/detect"
 	"github.com/xhd2015/dot-pkgs/go-pkgs/file/remotefs"
@@ -181,8 +182,9 @@ type ScanOptions struct {
 	Verbose       bool
 	Stderr        io.Writer
 	Names         []string
-	OnRepo        func(repo scan_repo.Repo) error
-	OnNamedHit    func(hit NamedHit, repo scan_repo.Repo) error
+	OnRepo         func(repo scan_repo.Repo) error
+	OnNamedPreview func(hit NamedHit, repo scan_repo.Repo) error
+	OnNamedHit     func(hit NamedHit, repo scan_repo.Repo) error
 }
 
 // BinaryScanSummary holds aggregate binary scan results.
@@ -197,22 +199,53 @@ type BinaryScanSummary struct {
 // BinaryHitCallback is invoked for each discovered binary.
 type BinaryHitCallback func(hit BinaryHit, repo scan_repo.Repo) error
 
-// ScanBinaries discovers git repos and classifies binaries, invoking onHit for each match.
-func ScanBinaries(ctx context.Context, opts ScanOptions, homeDir string, onHit BinaryHitCallback) (BinaryScanSummary, error) {
+// Scan discovers git repos and walks each repo for binary and/or named-entry matches.
+func Scan(ctx context.Context, opts ScanOptions, homeDir string, onHit BinaryHitCallback) (BinaryScanSummary, error) {
 	namesSet := makeNameSet(opts.Names)
 	summary := BinaryScanSummary{}
+	seenRepos := make(map[string]struct{})
+	var seenMu sync.Mutex
+	var summaryMu sync.Mutex
+	var sizingWg sync.WaitGroup
+	trackAsyncSizing := opts.OnNamedPreview != nil
+
 	processRepo := func(repo scan_repo.Repo) error {
+		repoKey := strings.ToLower(filepath.Clean(repo.Path))
+		seenMu.Lock()
+		if _, ok := seenRepos[repoKey]; ok {
+			seenMu.Unlock()
+			return nil
+		}
+		seenRepos[repoKey] = struct{}{}
+		seenMu.Unlock()
+
+		summaryMu.Lock()
 		summary.Repos++
-		if err := scanRepoFiles(ctx, repo, homeDir, namesSet, opts.Verbose, opts.Stderr, func(hit BinaryHit) error {
+		summaryMu.Unlock()
+
+		var sizingWG *sync.WaitGroup
+		if trackAsyncSizing {
+			sizingWG = &sizingWg
+		}
+		if err := scanRepoFiles(ctx, repo, homeDir, namesSet, onHit != nil, opts.Verbose, opts.Stderr, sizingWG, func(hit NamedHit) error {
+			if opts.OnNamedPreview == nil {
+				return nil
+			}
+			return opts.OnNamedPreview(hit, repo)
+		}, func(hit BinaryHit) error {
+			summaryMu.Lock()
 			summary.Binaries++
 			summary.TotalSize += hit.Size
+			summaryMu.Unlock()
 			if onHit != nil {
 				return onHit(hit, repo)
 			}
 			return nil
 		}, func(hit NamedHit) error {
+			summaryMu.Lock()
 			summary.NamedHits++
 			summary.TotalSize += hit.Size
+			summaryMu.Unlock()
 			if opts.OnNamedHit != nil {
 				return opts.OnNamedHit(hit, repo)
 			}
@@ -226,15 +259,61 @@ func ScanBinaries(ctx context.Context, opts ScanOptions, homeDir string, onHit B
 		return nil
 	}
 
-	_, err := scan_repo.Scan(ctx, scan_repo.Options{
-		Roots:    opts.Roots,
-		MaxDepth: opts.MaxDepth,
-		Verbose:  opts.Verbose,
-		Stderr:   opts.Stderr,
-		OnRepo:   processRepo,
-	})
+	scanOneRoot := func(roots []string, ignoreDirs []string) error {
+		_, err := scan_repo.Scan(ctx, scan_repo.Options{
+			Roots:      roots,
+			MaxDepth:   opts.MaxDepth,
+			IgnoreDirs: ignoreDirs,
+			Verbose:    opts.Verbose,
+			Stderr:     opts.Stderr,
+			OnRepo:     processRepo,
+		})
+		return err
+	}
+
+	prefixIgnoreDirs := func(current string, prior []string) []string {
+		currentClean := filepath.Clean(current)
+		ignoreDirs := make([]string, 0, len(prior))
+		for _, root := range prior {
+			clean := filepath.Clean(root)
+			rel, relErr := filepath.Rel(currentClean, clean)
+			if relErr == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				ignoreDirs = append(ignoreDirs, clean)
+			}
+		}
+		return ignoreDirs
+	}
+
+	var err error
+	if len(opts.Roots) > 1 {
+		homeRoot := opts.Roots[len(opts.Roots)-1]
+		prefixRoots := opts.Roots[:len(opts.Roots)-1]
+		scanned := make([]string, 0, len(prefixRoots))
+		for _, root := range prefixRoots {
+			if err = scanOneRoot([]string{root}, prefixIgnoreDirs(root, scanned)); err != nil {
+				return summary, err
+			}
+			scanned = append(scanned, root)
+		}
+		err = scanOneRoot([]string{homeRoot}, prefixIgnoreDirs(homeRoot, prefixRoots))
+	} else {
+		err = scanOneRoot(opts.Roots, nil)
+	}
 	if err != nil {
 		return summary, err
+	}
+
+	if trackAsyncSizing {
+		done := make(chan struct{})
+		go func() {
+			sizingWg.Wait()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return summary, ctx.Err()
+		}
 	}
 
 	summary.TotalHuman = FormatHumanSize(summary.TotalSize)
@@ -265,7 +344,7 @@ func runScan(ctx context.Context, opts scanOptions, homeDir string, stdout, stde
 		}
 		return flush(stdout)
 	}
-	summary, err := ScanBinaries(ctx, scanOpts, homeDir, func(hit BinaryHit, _ scan_repo.Repo) error {
+	summary, err := Scan(ctx, scanOpts, homeDir, func(hit BinaryHit, _ scan_repo.Repo) error {
 		result.Binaries = append(result.Binaries, hit)
 		result.TotalSize += hit.Size
 		if opts.json {
@@ -296,7 +375,78 @@ func runScan(ctx context.Context, opts scanOptions, homeDir string, stdout, stde
 	return &result, flush(stdout)
 }
 
-func scanRepoFiles(ctx context.Context, repo scan_repo.Repo, homeDir string, names map[string]bool, verbose bool, stderr io.Writer, onHit func(BinaryHit) error, onNamedHit func(NamedHit) error) error {
+func emitNamedDir(path, name string, repo scan_repo.Repo, homeDir string, names map[string]bool, sizingWG *sync.WaitGroup, onNamedPreview func(NamedHit) error, onNamedHit func(NamedHit) error) error {
+	if onNamedPreview != nil {
+		preview := NamedHit{
+			Path:      DisplayPath(path, homeDir),
+			Name:      name,
+			Size:      0,
+			SizeHuman: "0 B",
+			RepoPath:  DisplayPath(repo.Path, homeDir),
+			RepoName:  repo.Name,
+		}
+		if err := onNamedPreview(preview); err != nil {
+			return err
+		}
+		if sizingWG != nil {
+			sizingWG.Add(1)
+			go func() {
+				defer sizingWG.Done()
+				_ = emitNamedDirSized(path, name, repo, homeDir, names, onNamedHit)
+			}()
+		} else {
+			go emitNamedDirSized(path, name, repo, homeDir, names, onNamedHit)
+		}
+		return nil
+	}
+	return emitNamedDirSized(path, name, repo, homeDir, names, onNamedHit)
+}
+
+func emitNamedDirSized(path, name string, repo scan_repo.Repo, homeDir string, names map[string]bool, onNamedHit func(NamedHit) error) error {
+	size, innerHits, err := computeNamedDirSize(path, names)
+	if err != nil {
+		return err
+	}
+	for _, ih := range innerHits {
+		ih.Path = DisplayPath(ih.Path, homeDir)
+		ih.RepoPath = DisplayPath(repo.Path, homeDir)
+		ih.RepoName = repo.Name
+		if err := onNamedHit(ih); err != nil {
+			return err
+		}
+	}
+	hit := NamedHit{
+		Path:      DisplayPath(path, homeDir),
+		Name:      name,
+		Size:      size,
+		SizeHuman: FormatHumanSize(size),
+		RepoPath:  DisplayPath(repo.Path, homeDir),
+		RepoName:  repo.Name,
+	}
+	return onNamedHit(hit)
+}
+
+func scanRepoFiles(ctx context.Context, repo scan_repo.Repo, homeDir string, names map[string]bool, classifyBinaries bool, verbose bool, stderr io.Writer, sizingWG *sync.WaitGroup, onNamedPreview func(NamedHit) error, onHit func(BinaryHit) error, onNamedHit func(NamedHit) error) error {
+	handledNamedDirs := make(map[string]struct{})
+	if len(names) > 0 {
+		for name := range names {
+			dirPath := filepath.Join(repo.Path, name)
+			info, err := os.Stat(dirPath)
+			if err != nil || !info.IsDir() {
+				continue
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+			if err := emitNamedDir(dirPath, name, repo, homeDir, names, sizingWG, onNamedPreview, onNamedHit); err != nil {
+				return err
+			}
+			handledNamedDirs[dirPath] = struct{}{}
+		}
+	}
+
 	return filepath.WalkDir(repo.Path, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			if os.IsPermission(walkErr) {
@@ -313,28 +463,11 @@ func scanRepoFiles(ctx context.Context, repo scan_repo.Repo, homeDir string, nam
 
 		if d.IsDir() {
 			if path != repo.Path {
+				if _, done := handledNamedDirs[path]; done {
+					return filepath.SkipDir
+				}
 				if len(names) > 0 && names[d.Name()] {
-					size, innerHits, err := computeNamedDirSize(path, names)
-					if err != nil {
-						return err
-					}
-					for _, ih := range innerHits {
-						ih.Path = DisplayPath(ih.Path, homeDir)
-						ih.RepoPath = DisplayPath(repo.Path, homeDir)
-						ih.RepoName = repo.Name
-						if err := onNamedHit(ih); err != nil {
-							return err
-						}
-					}
-					hit := NamedHit{
-						Path:      DisplayPath(path, homeDir),
-						Name:      d.Name(),
-						Size:      size,
-						SizeHuman: FormatHumanSize(size),
-						RepoPath:  DisplayPath(repo.Path, homeDir),
-						RepoName:  repo.Name,
-					}
-					if err := onNamedHit(hit); err != nil {
+					if err := emitNamedDir(path, d.Name(), repo, homeDir, names, sizingWG, onNamedPreview, onNamedHit); err != nil {
 						return err
 					}
 					return filepath.SkipDir
@@ -352,6 +485,11 @@ func scanRepoFiles(ctx context.Context, repo scan_repo.Repo, homeDir string, nam
 			}
 			return nil
 		}
+
+		if !classifyBinaries && (len(names) == 0 || !names[d.Name()]) {
+			return nil
+		}
+
 		info, err := d.Info()
 		if err != nil {
 			if os.IsPermission(err) {
@@ -375,6 +513,9 @@ func scanRepoFiles(ctx context.Context, repo scan_repo.Repo, homeDir string, nam
 			return onNamedHit(hit)
 		}
 
+		if !classifyBinaries {
+			return nil
+		}
 		hit, ok := ClassifyFile(path, info.Size(), repo, homeDir)
 		if !ok {
 			return nil
@@ -465,6 +606,58 @@ func expandPath(path string, homeDir string) (string, error) {
 		return filepath.Join(homeDir, path[2:]), nil
 	}
 	return path, nil
+}
+
+// PrioritizedScanRoots returns home subdirectories likely to contain git repos first,
+// then the full home directory, so named scans surface early hits sooner.
+func PrioritizedScanRoots(homeDir string) []string {
+	home := filepath.Clean(homeDir)
+	candidates := []string{
+		filepath.Join(home, "Projects", "gopath"),
+		filepath.Join(home, "Projects"),
+		filepath.Join(home, "go", "src"),
+		filepath.Join(home, "work"),
+		filepath.Join(home, ".wrk", "worktrees"),
+		filepath.Join(home, "code"),
+		filepath.Join(home, "dev"),
+		filepath.Join(home, "src"),
+		filepath.Join(home, "workspace"),
+		filepath.Join(home, "repos"),
+	}
+	roots := make([]string, 0, len(candidates)+1)
+	seen := make(map[string]struct{}, len(candidates)+1)
+	for _, candidate := range candidates {
+		abs, err := filepath.Abs(candidate)
+		if err != nil {
+			continue
+		}
+		abs = filepath.Clean(abs)
+		key := strings.ToLower(abs)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		info, err := os.Stat(abs)
+		if err != nil || !info.IsDir() {
+			continue
+		}
+		seen[key] = struct{}{}
+		roots = append(roots, abs)
+	}
+	homeAbs, err := filepath.Abs(home)
+	if err != nil {
+		if len(roots) == 0 {
+			return []string{home}
+		}
+		return roots
+	}
+	homeAbs = filepath.Clean(homeAbs)
+	if _, ok := seen[strings.ToLower(homeAbs)]; !ok {
+		roots = append(roots, homeAbs)
+	}
+	if len(roots) == 0 {
+		return []string{homeAbs}
+	}
+	return roots
 }
 
 // DisplayPath converts an absolute path to a ~/ prefixed slash path for display.
@@ -559,6 +752,13 @@ func computeNamedDirSize(path string, names map[string]bool) (size int64, innerH
 func computeDirSize(path string, names map[string]bool) (int64, error) {
 	size, _, err := computeNamedDirSize(path, names)
 	return size, err
+}
+
+// DirSize returns the recursive byte size of path. When names is non-nil, nested
+// directories whose basename is in names are sized separately and excluded from
+// the parent total (same rules as node_modules scan sizing).
+func DirSize(path string, names map[string]bool) (int64, error) {
+	return computeDirSize(path, names)
 }
 
 func writeJSONNamedHit(w io.Writer, hit NamedHit) error {

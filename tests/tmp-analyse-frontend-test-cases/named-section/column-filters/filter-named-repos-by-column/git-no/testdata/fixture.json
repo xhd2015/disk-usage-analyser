@@ -1,0 +1,43 @@
+{
+  "filters": {
+    "git": "no",
+    "packageJson": "all",
+    "pm": "all"
+  },
+  "namedByRepo": {
+    "/repos/mixed": [
+      {
+        "path": "/repos/mixed/tracked/node_modules",
+        "name": "node_modules",
+        "size": 2097152,
+        "sizeHuman": "2 MB",
+        "repoPath": "/repos/mixed",
+        "repoName": "mixed",
+        "gitTracked": true,
+        "hasPackageJson": true,
+        "packageManager": "npm"
+      },
+      {
+        "path": "/repos/mixed/untracked/node_modules",
+        "name": "node_modules",
+        "size": 2097152,
+        "sizeHuman": "2 MB",
+        "repoPath": "/repos/mixed",
+        "repoName": "mixed",
+        "gitTracked": false,
+        "hasPackageJson": true,
+        "packageManager": "npm"
+      },
+      {
+        "path": "/repos/mixed/unknown-git/node_modules",
+        "name": "node_modules",
+        "size": 2097152,
+        "sizeHuman": "2 MB",
+        "repoPath": "/repos/mixed",
+        "repoName": "mixed",
+        "hasPackageJson": true,
+        "packageManager": "npm"
+      }
+    ]
+  }
+}

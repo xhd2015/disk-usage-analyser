@@ -1,0 +1,38 @@
+{
+  "filters": {
+    "git": "all",
+    "packageJson": "all",
+    "pm": "pnpm"
+  },
+  "namedByRepo": {
+    "/repos/pm": [
+      {
+        "path": "/repos/pm/npm/node_modules",
+        "name": "node_modules",
+        "size": 2097152,
+        "sizeHuman": "2 MB",
+        "repoPath": "/repos/pm",
+        "repoName": "pm",
+        "packageManager": "npm"
+      },
+      {
+        "path": "/repos/pm/pnpm/node_modules",
+        "name": "node_modules",
+        "size": 2097152,
+        "sizeHuman": "2 MB",
+        "repoPath": "/repos/pm",
+        "repoName": "pm",
+        "packageManager": "pnpm"
+      },
+      {
+        "path": "/repos/pm/yarn/node_modules",
+        "name": "node_modules",
+        "size": 2097152,
+        "sizeHuman": "2 MB",
+        "repoPath": "/repos/pm",
+        "repoName": "pm",
+        "packageManager": "yarn"
+      }
+    ]
+  }
+}

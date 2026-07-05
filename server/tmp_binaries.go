@@ -95,7 +95,7 @@ func HandleTmpBinariesScan(w http.ResponseWriter, r *http.Request) {
 
 	clearBinarySession(homeDir)
 
-	summary, err := tmpfiles.ScanBinaries(ctx, tmpfiles.ScanOptions{
+	summary, err := tmpfiles.Scan(ctx, tmpfiles.ScanOptions{
 		Roots:    []string{homeDir},
 		MaxDepth: 0,
 	}, homeDir, func(hit tmpfiles.BinaryHit, repo scan_repo.Repo) error {
