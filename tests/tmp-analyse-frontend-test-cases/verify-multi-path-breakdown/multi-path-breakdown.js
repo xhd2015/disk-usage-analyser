@@ -26,6 +26,7 @@ await check('[data-testid="card-xcode"] [data-testid="breakdown-items"]', 'card-
 await check('[data-testid="card-xcode"] [data-testid="breakdown-label-1"]', 'card-xcode-breakdown-label-1');
 await check('[data-testid="card-xcode"] [data-testid="breakdown-size-1"]', 'card-xcode-breakdown-size-1');
 await check('[data-testid="card-xcode"] [data-testid="breakdown-row-1"]', 'card-xcode-breakdown-row-1');
+await check('[data-testid="card-xcode"] [data-testid="breakdown-row-4"]', 'card-xcode-breakdown-row-4');
 
 // Verify breakdown labels show full tilde paths (not truncated)
 const goLabelText = await page.$eval('[data-testid="card-go"] [data-testid="breakdown-label-1"]', el => el.textContent).catch(() => '');

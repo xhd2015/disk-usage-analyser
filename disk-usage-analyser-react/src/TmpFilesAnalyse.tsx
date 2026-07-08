@@ -138,7 +138,11 @@ const cleanupSuggestions: Record<string, CleanupSuggestion[]> = {
     ],
     xcode: [
         { command: 'rm -rf ~/Library/Developer/Xcode/DerivedData', removes: 'Xcode build products', recoverable: 'Yes, rebuilt on next Xcode build' },
+        { command: 'rm -rf ~/Library/Developer/Xcode/iOS\\ DeviceSupport/*', removes: 'iOS DeviceSupport symbols and support files', recoverable: 'Yes, re-downloaded when device reconnects' },
+        { command: 'rm -rf ~/Library/Developer/Xcode/Archives/*', removes: 'Old Xcode archives (signed builds)', recoverable: 'No — archives are valuable; only delete if you no longer need those builds' },
+        { command: 'rm -rf ~/Library/Developer/Xcode/DocumentationCache', removes: 'Xcode documentation cache', recoverable: 'Yes, re-fetched by Xcode' },
         { command: 'xcrun simctl shutdown all && xcrun simctl delete all', removes: 'All iOS Simulators (devices)', recoverable: 'Yes, recreated via Xcode > Settings > Devices' },
+        { command: 'xcrun simctl runtime list && xcrun simctl runtime delete <UUID>', removes: 'iOS Simulator runtimes (use UUID from runtime list, not SimRuntime bundle IDs)', recoverable: 'Yes, re-downloaded via Xcode when needed' },
     ],
     composer: [
         { command: 'composer clear-cache', removes: 'PHP Composer package cache', recoverable: 'Yes, re-downloaded on composer install' },

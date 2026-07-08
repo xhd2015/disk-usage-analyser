@@ -35,7 +35,9 @@ if (!popover) {
 const popoverText = await popover.textContent() || '';
 
 console.log(`CLEANUP_XCODE_DERIVED: ${popoverText.includes('DerivedData')}`);
-console.log(`CLEANUP_XCODE_SIMULATORS: ${popoverText.includes('simctl')}`);
-console.log(`CLEANUP_XCODE_RECOVERABLE: ${popoverText.includes('rebuilt') || popoverText.includes('Rebuilt') || popoverText.includes('recreated') || popoverText.includes('Recreated')}`);
+console.log(`CLEANUP_XCODE_DEVICE_SUPPORT: ${popoverText.includes('DeviceSupport') || popoverText.includes('iOS DeviceSupport')}`);
+console.log(`CLEANUP_XCODE_SIMULATORS: ${popoverText.includes('simctl shutdown all') && popoverText.includes('simctl delete all')}`);
+console.log(`CLEANUP_XCODE_RUNTIME_DELETE: ${popoverText.includes('simctl runtime delete') && /runtime delete.*UUID|delete <UUID>/i.test(popoverText)}`);
+console.log(`CLEANUP_XCODE_RECOVERABLE: ${/rebuilt|Rebuilt|recreated|Recreated|re-download|re-fetched/i.test(popoverText)}`);
 
 console.log('DONE');

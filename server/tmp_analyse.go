@@ -89,7 +89,12 @@ func DiscoverLocations(homeDir string) []TmpLocation {
 		{Path: filepath.Join(homeDir, ".m2", "repository"), Label: "Maven", Category: "maven", RebootSafe: true},
 		{Path: filepath.Join(homeDir, "Library", "Android", "sdk"), Label: "Android", Category: "android", RebootSafe: true},
 		{Path: filepath.Join(homeDir, "Library", "Caches", "Homebrew"), Label: "Homebrew", Category: "brew", RebootSafe: true},
-		{Path: filepath.Join(homeDir, "Library", "Developer", "Xcode", "DerivedData"), Label: "Xcode", Category: "xcode", RebootSafe: true, ExtraPaths: []string{filepath.Join(homeDir, "Library", "Developer", "CoreSimulator", "Devices")}},
+		{Path: filepath.Join(homeDir, "Library", "Developer", "Xcode", "DerivedData"), Label: "Xcode", Category: "xcode", RebootSafe: true, ExtraPaths: []string{
+			filepath.Join(homeDir, "Library", "Developer", "CoreSimulator", "Devices"),
+			filepath.Join(homeDir, "Library", "Developer", "Xcode", "iOS DeviceSupport"),
+			filepath.Join(homeDir, "Library", "Developer", "Xcode", "Archives"),
+			filepath.Join(homeDir, "Library", "Developer", "Xcode", "DocumentationCache"),
+		}},
 		{Path: filepath.Join(homeDir, ".composer", "cache"), Label: "Composer", Category: "composer", RebootSafe: true},
 		{Path: filepath.Join(homeDir, ".local", "share", "opencode", "snapshot"), Label: "OpenCode", Category: "opencode", RebootSafe: true,
 			ExtraPaths: []string{
@@ -441,6 +446,10 @@ func HandleTmpAnalyse(w http.ResponseWriter, r *http.Request) {
 			}
 		case "docker":
 			if items, _ := CollectRuntimeStats(locations[i].Category); len(items) > 0 {
+				locations[i].RuntimeItems = items
+			}
+		case "xcode":
+			if items, _ := CollectSimulatorRuntimeStats(); len(items) > 0 {
 				locations[i].RuntimeItems = items
 			}
 		}

@@ -1,0 +1,9 @@
+{
+  "D4444444-4444-4444-4444-444444444444": {
+    "version": "iOS 18.5",
+    "identifier": "com.apple.CoreSimulator.SimRuntime.iOS-18-5",
+    "mountPath": "__MOUNT_IOS_18_5__",
+    "deletable": true,
+    "state": "Ready"
+  }
+}

@@ -11,6 +11,7 @@ import (
 	"disk-usage-analyser/analyse"
 	"disk-usage-analyser/server"
 	"disk-usage-analyser/tmpfiles"
+	"disk-usage-analyser/usagescan"
 
 	"github.com/xhd2015/kool/pkgs/web"
 	"github.com/xhd2015/less-gen/flags"
@@ -21,6 +22,7 @@ Usage: disk-usage-analyser <subcommand>
 
 Subcommands:
   analyse [DIR]     Analyse directory tree size and link metrics
+  scan [PATH]       List immediate children with recursive directory sizes
   tmp-files scan    Scan temporary file candidates
 `
 
@@ -49,6 +51,20 @@ func RunWithOptions(ctx context.Context, args []string, opts Options) error {
 	stderr := opts.Stderr
 	if stderr == nil {
 		stderr = os.Stderr
+	}
+
+	if len(args) > 0 && args[0] == "scan" {
+		exitCode, err := usagescan.RunCLI(args[1:], usagescan.CLIOptions{
+			Stdout: stdout,
+			Stderr: stderr,
+		})
+		if err != nil {
+			return err
+		}
+		if exitCode != 0 {
+			return fmt.Errorf("scan exited with code %d", exitCode)
+		}
+		return nil
 	}
 
 	if len(args) > 0 && args[0] == "analyse" {

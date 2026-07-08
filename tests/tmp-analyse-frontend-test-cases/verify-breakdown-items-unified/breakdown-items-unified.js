@@ -51,20 +51,18 @@ if (goCard) {
     console.log('CARD_EXISTS go: false (skipping breakdown checks)');
 }
 
-// === Xcode Card (multi-item: 2 items, macOS only) ===
+// === Xcode Card (multi-item: 5 items, macOS only) ===
 const xcodeCard = await page.$('[data-testid="card-xcode"]');
 if (xcodeCard) {
     console.log('CARD_EXISTS xcode: true');
 
     await check('[data-testid="card-xcode"] [data-testid="breakdown-items"]', 'xcode-breakdown-items');
 
-    await check('[data-testid="card-xcode"] [data-testid="breakdown-row-0"]', 'xcode-breakdown-row-0');
-    await check('[data-testid="card-xcode"] [data-testid="breakdown-label-0"]', 'xcode-breakdown-label-0');
-    await check('[data-testid="card-xcode"] [data-testid="breakdown-size-0"]', 'xcode-breakdown-size-0');
-
-    await check('[data-testid="card-xcode"] [data-testid="breakdown-row-1"]', 'xcode-breakdown-row-1');
-    await check('[data-testid="card-xcode"] [data-testid="breakdown-label-1"]', 'xcode-breakdown-label-1');
-    await check('[data-testid="card-xcode"] [data-testid="breakdown-size-1"]', 'xcode-breakdown-size-1');
+    for (let i = 0; i <= 4; i++) {
+        await check(`[data-testid="card-xcode"] [data-testid="breakdown-row-${i}"]`, `xcode-breakdown-row-${i}`);
+        await check(`[data-testid="card-xcode"] [data-testid="breakdown-label-${i}"]`, `xcode-breakdown-label-${i}`);
+        await check(`[data-testid="card-xcode"] [data-testid="breakdown-size-${i}"]`, `xcode-breakdown-size-${i}`);
+    }
 
     const xcodeCardPath = await page.$('[data-testid="card-xcode"] [data-testid="card-path"]');
     console.log(`NO_STANDALONE_PATH xcode: ${xcodeCardPath === null}`);

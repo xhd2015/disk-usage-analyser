@@ -9,7 +9,7 @@ User -> /tmp-analyse -> playwright-debug checks data-testid elements
 
 ## Preconditions
 - The React app is compiled and served at `SERVER_URL`
-- The Xcode card has a cleanup indicator that shows simulator-specific cleanup on click
+- The Xcode card has a cleanup indicator that shows expanded cleanup tips (DeviceSupport, runtime UUID delete, simulators) on click
 
 ## Steps
 1. Set req.ScriptFile to "cleanup-popover-xcode.js"

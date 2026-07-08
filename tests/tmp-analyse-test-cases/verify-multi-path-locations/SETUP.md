@@ -20,7 +20,7 @@ Client -> HandleTmpAnalyse -> DiscoverLocations -> ScanWithProgress -> SSE event
 
 ## Context
 - Go: primary Path = ~/go/pkg/mod, ExtraPaths = [~/Library/Caches/go-build]
-- Xcode: primary Path = ~/Library/Developer/Xcode/DerivedData, ExtraPaths = [~/Library/Developer/CoreSimulator/Devices]
+- Xcode: primary Path = ~/Library/Developer/Xcode/DerivedData, ExtraPaths = [CoreSimulator/Devices, iOS DeviceSupport, Archives, DocumentationCache]
 - All other 15 software locations have empty ExtraPaths
 
 ```go

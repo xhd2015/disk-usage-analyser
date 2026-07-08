@@ -1,6 +1,6 @@
 ## Expected
 - Go location has exactly 1 ExtraPath: `~/Library/Caches/go-build` (tilde-prefixed, full path)
-- Xcode location has exactly 1 ExtraPath: `~/Library/Developer/CoreSimulator/Devices` (tilde-prefixed, full path)
+- Xcode location has exactly 4 ExtraPaths in order: CoreSimulator/Devices, iOS DeviceSupport, Archives, DocumentationCache (tilde-prefixed)
 - All other single-path software locations have empty ExtraPaths (length 0); multi-path tools include OpenCode, Claude Code, Codex, and Cursor
 - ExtraPaths use `~` prefix (not absolute home directory)
 
@@ -20,7 +20,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("expected 21 software locations, got %d", len(resp.Locations))
 	}
 
-	expectedExtraPaths := map[string]string{
+	expectedFirstExtra := map[string]string{
 		"go":       "~/Library/Caches/go-build",
 		"xcode":    "~/Library/Developer/CoreSimulator/Devices",
 		"opencode": "~/.local/share/opencode/project",
@@ -29,16 +29,31 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		"cursor":   "~/Library/Application Support/Caches/cursor-updater",
 	}
 
-	multiPathCats := map[string]int{"go": 1, "xcode": 1, "opencode": 6, "claude": 4, "codex": 1, "cursor": 2}
+	expectedXcodeExtras := []string{
+		"~/Library/Developer/CoreSimulator/Devices",
+		"~/Library/Developer/Xcode/iOS DeviceSupport",
+		"~/Library/Developer/Xcode/Archives",
+		"~/Library/Developer/Xcode/DocumentationCache",
+	}
+
+	multiPathCats := map[string]int{"go": 1, "xcode": 4, "opencode": 6, "claude": 4, "codex": 1, "cursor": 2}
 	for _, loc := range resp.Locations {
 		expectedExtraCount, isMulti := multiPathCats[loc.Category]
 		if isMulti {
 			if len(loc.ExtraPaths) != expectedExtraCount {
 				t.Fatalf("location %s: expected %d ExtraPaths, got %d", loc.Category, expectedExtraCount, len(loc.ExtraPaths))
 			}
-			expected := expectedExtraPaths[loc.Category]
-			if loc.ExtraPaths[0] != expected {
-				t.Fatalf("location %s: expected ExtraPaths[0]=%s, got %s", loc.Category, expected, loc.ExtraPaths[0])
+			if loc.Category == "xcode" {
+				for i, want := range expectedXcodeExtras {
+					if loc.ExtraPaths[i] != want {
+						t.Fatalf("location xcode: ExtraPaths[%d] expected %s, got %s", i, want, loc.ExtraPaths[i])
+					}
+				}
+			} else {
+				expected := expectedFirstExtra[loc.Category]
+				if loc.ExtraPaths[0] != expected {
+					t.Fatalf("location %s: expected ExtraPaths[0]=%s, got %s", loc.Category, expected, loc.ExtraPaths[0])
+				}
 			}
 		} else {
 			if len(loc.ExtraPaths) != 0 {

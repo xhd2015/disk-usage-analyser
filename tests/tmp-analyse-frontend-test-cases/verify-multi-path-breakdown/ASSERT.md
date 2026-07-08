@@ -49,6 +49,11 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if !strings.Contains(resp.Output, "FULL_PATH xcode-label-not-truncated: true") {
 		t.Fatal("expected Xcode breakdown label to be full path (not truncated to 2 components)")
 	}
+	// Xcode row 4 (DocumentationCache) should exist on multi-path card
+	row4Line := findLine(resp.Output, "ELEM card-xcode-breakdown-row-4")
+	if row4Line != "" && strings.Contains(row4Line, "MISSING") {
+		t.Fatal("expected Xcode breakdown-row-4 (DocumentationCache) to exist")
+	}
 
 	// Single-path tools should NOT have breakdown-items
 	singlePathCats := []string{"bun", "docker", "gradle", "maven"}

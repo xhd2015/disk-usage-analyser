@@ -1,7 +1,7 @@
 ## Expected
 - Go card has unified `breakdown-items` wrapper containing all items (no primary/extra distinction)
 - Go card shows `breakdown-row-0` (primary path: ~/go/pkg/mod) and `breakdown-row-1` (extra path: ~/Library/Caches/go-build)
-- Xcode card similarly shows `breakdown-row-0` (DerivedData) and `breakdown-row-1` (CoreSimulator/Devices)
+- Xcode card shows `breakdown-row-0` through `breakdown-row-4` (DerivedData + four ExtraPaths)
 - Each row uses flexbox layout with `display:flex` and `justify-content:space-between`
 - Multi-item cards do NOT have standalone `card-path` elements
 - Single-item cards (npm, bun, docker, gradle) still have `card-path` centered text
@@ -10,6 +10,7 @@
 
 ```go
 import (
+	"strconv"
 	"strings"
 )
 
@@ -75,13 +76,13 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 			t.Fatal("expected Xcode card to have breakdown-items wrapper")
 		}
 
-		for _, label := range []string{
-			"xcode-breakdown-row-0", "xcode-breakdown-label-0", "xcode-breakdown-size-0",
-			"xcode-breakdown-row-1", "xcode-breakdown-label-1", "xcode-breakdown-size-1",
-		} {
-			line := findLine(resp.Output, "ELEM "+label)
-			if line == "" || strings.Contains(line, "MISSING") {
-				t.Fatalf("expected %s to exist", label)
+		for i := 0; i <= 4; i++ {
+			for _, suffix := range []string{"breakdown-row", "breakdown-label", "breakdown-size"} {
+				label := "xcode-" + suffix + "-" + strconv.Itoa(i)
+				line := findLine(resp.Output, "ELEM "+label)
+				if line == "" || strings.Contains(line, "MISSING") {
+					t.Fatalf("expected %s to exist", label)
+				}
 			}
 		}
 

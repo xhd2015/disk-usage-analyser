@@ -4,7 +4,7 @@
 - Each has a non-empty Path, Label, Category distinct from core categories
 - All home-relative paths use `~` prefix (e.g., `~/go/pkg/mod` instead of `/Users/testuser/go/pkg/mod`)
 - Go location has Path `~/go/pkg/mod` and ExtraPaths containing `~/Library/Caches/go-build`
-- Xcode location has Path `~/Library/Developer/Xcode/DerivedData` and ExtraPaths containing `~/Library/Developer/CoreSimulator/Devices`
+- Xcode location has Path `~/Library/Developer/Xcode/DerivedData` and all four ExtraPaths (CoreSimulator/Devices, iOS DeviceSupport, Archives, DocumentationCache)
 - Nginx path remains absolute (not under home dir): `/usr/local/var/log/nginx`
 - Single-path tools like npm, Bun, Docker have empty or nil ExtraPaths
 
@@ -71,7 +71,22 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 			if len(found.ExtraPaths) == 0 {
 				t.Fatalf("location %s: expected ExtraPaths to be non-empty", cat)
 			}
-			if exp.extraCheck != "" {
+			if cat == "xcode" {
+				expectedXcodeExtras := []string{
+					"~/Library/Developer/CoreSimulator/Devices",
+					"~/Library/Developer/Xcode/iOS DeviceSupport",
+					"~/Library/Developer/Xcode/Archives",
+					"~/Library/Developer/Xcode/DocumentationCache",
+				}
+				if len(found.ExtraPaths) != len(expectedXcodeExtras) {
+					t.Fatalf("location xcode: expected %d ExtraPaths, got %d", len(expectedXcodeExtras), len(found.ExtraPaths))
+				}
+				for i, want := range expectedXcodeExtras {
+					if found.ExtraPaths[i] != want {
+						t.Fatalf("location xcode: ExtraPaths[%d] expected %s, got %s", i, want, found.ExtraPaths[i])
+					}
+				}
+			} else if exp.extraCheck != "" {
 				if found.ExtraPaths[0] != exp.extraCheck {
 					t.Fatalf("location %s: expected ExtraPaths[0]=%s, got %s", cat, exp.extraCheck, found.ExtraPaths[0])
 				}
