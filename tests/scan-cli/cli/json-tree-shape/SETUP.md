@@ -5,7 +5,7 @@
 ## Steps
 
 1. Write `sample.bin` (1024 bytes) in the fixture root.
-2. Run `RunCLI --json <fixture>` with no extra flags (JSON defaults: threshold 1M, maxDepth 24).
+2. Run `RunCLI --json <fixture>` with no extra flags (JSON defaults: min 1M, maxDepth 24).
 
 ```go
 func Setup(t *testing.T, req *Request) error {

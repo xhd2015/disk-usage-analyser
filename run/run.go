@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"disk-usage-analyser/analyse"
+	"disk-usage-analyser/explain"
 	"disk-usage-analyser/server"
 	"disk-usage-analyser/tmpfiles"
 	"disk-usage-analyser/usagescan"
@@ -22,7 +23,8 @@ Usage: disk-usage-analyser <subcommand>
 
 Subcommands:
   analyse [DIR]     Analyse directory tree size and link metrics
-  scan [PATH]       List immediate children with recursive directory sizes
+  scan [PATH]       Walk a directory and emit a size tree (text or --json); use scan --inspect FILE to query offline
+  explain [PATH]    Explain reclaim kind, size breakdown, and safe-to-reclaim advice for a path
   tmp-files scan    Scan temporary file candidates
 `
 
@@ -67,6 +69,20 @@ func RunWithOptions(ctx context.Context, args []string, opts Options) error {
 		return nil
 	}
 
+	if len(args) > 0 && args[0] == "explain" {
+		exitCode, err := explain.RunCLI(args[1:], explain.CLIOptions{
+			Stdout: stdout,
+			Stderr: stderr,
+		})
+		if err != nil {
+			return err
+		}
+		if exitCode != 0 {
+			return fmt.Errorf("explain exited with code %d", exitCode)
+		}
+		return nil
+	}
+
 	if len(args) > 0 && args[0] == "analyse" {
 		exitCode, err := analyse.RunCLI(args[1:], analyse.CLIOptions{
 			Stdout: stdout,
@@ -101,8 +117,18 @@ func RunWithOptions(ctx context.Context, args []string, opts Options) error {
 	args, err := flags.
 		Bool("--dev", &devFlag).
 		String("--component", &component).
-		Help("-h,--help", help).
+		HelpFunc("-h,--help", func() {
+			txt := strings.TrimPrefix(help, "\n")
+			fmt.Fprint(stdout, txt)
+			if !strings.HasSuffix(txt, "\n") {
+				fmt.Fprintln(stdout)
+			}
+		}).
+		HelpNoExit().
 		Parse(args)
+	if err == flags.ErrHelp {
+		return nil
+	}
 	if err != nil {
 		return err
 	}

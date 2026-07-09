@@ -15,7 +15,7 @@ func Setup(t *testing.T, req *Request) error {
 	writeSizedFile(t, req.FixtureDir, "dir/nested.bin", 80)
 	writeSizedFile(t, req.FixtureDir, "top.bin", 20)
 	req.ScanOpts = &usagescan.ScanOptions{
-		Threshold: 0,
+		Min: 0,
 		MaxDepth:  1,
 	}
 	return nil

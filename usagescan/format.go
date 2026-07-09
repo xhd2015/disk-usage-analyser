@@ -2,7 +2,6 @@ package usagescan
 
 import (
 	"fmt"
-	"strings"
 )
 
 type treeRow struct {
@@ -11,31 +10,15 @@ type treeRow struct {
 }
 
 func formatTreeText(result TreeResult) string {
-	rows := []treeRow{}
-	collectTreeRows(result.Tree.Children, "", &rows)
-
-	maxLeft := 0
-	for _, row := range rows {
-		if n := len(row.left); n > maxLeft {
-			maxLeft = n
-		}
+	// Tree-only live/capture path (no SOURCE, no TOP).
+	view := ViewResult{
+		ScanPath:  result.Path,
+		TotalSize: result.TotalSize,
+		Min:       result.Min,
+		MaxDepth:  result.MaxDepth,
+		Tree:      result.Tree,
 	}
-	sizeCol := maxLeft + 2
-
-	lines := []string{
-		fmt.Sprintf("PATH: %s", result.Path),
-		fmt.Sprintf("TOTAL: %s", formatHumanSize(result.TotalSize)),
-		fmt.Sprintf("THRESHOLD: %s", FormatCompactHumanSize(result.Threshold)),
-		fmt.Sprintf("MAX-DEPTH: %d", result.MaxDepth),
-		"",
-		".",
-	}
-	for _, row := range rows {
-		padding := sizeCol - len(row.left)
-		lines = append(lines, row.left+strings.Repeat(" ", padding)+FormatCompactHumanSize(row.size))
-	}
-	lines = append(lines, "", "")
-	return strings.Join(lines, "\n")
+	return FormatViewText(view, ViewOptions{})
 }
 
 func collectTreeRows(children []TreeNode, prefix string, rows *[]treeRow) {

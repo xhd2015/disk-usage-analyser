@@ -1,9 +1,10 @@
 ## Expected
 
 - Exit code 0.
-- Stdout is one JSON object with `path`, `totalSize`, and nested `tree`.
-- `totalSize` is 500; `tree.children` include `big.txt` (400) and `small.txt` (100).
+- Stdout is one JSON object with `path`, `totalSize`, `min`, and nested `tree`.
+- `min` is 1; `totalSize` is 500; `tree.children` include `big.txt` (400) and `small.txt` (100).
 - Children sorted by size descending.
+- No `threshold` key.
 - Stdout ends with a trailing blank line.
 
 ## Exit Code
@@ -13,7 +14,6 @@
 ```go
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 )
 
@@ -24,26 +24,29 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 	if resp.ExitCode != 0 {
 		t.Fatalf("expected exit code 0, got %d (err=%v)", resp.ExitCode, resp.Err)
 	}
-	content := strings.TrimRight(resp.Stdout, "\n")
-	lines := strings.Split(content, "\n")
-	if len(lines) != 1 {
-		t.Fatalf("expected one JSON line, got %d lines:\n%s", len(lines), resp.Stdout)
-	}
+	line := firstJSONObjectLine(t, resp.Stdout)
 	var payload map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(lines[0]), &payload); err != nil {
+	if err := json.Unmarshal([]byte(line), &payload); err != nil {
 		t.Fatalf("stdout is not valid JSON: %v\n%s", err, resp.Stdout)
 	}
-	for _, key := range []string{"path", "totalSize", "tree"} {
+	for _, key := range []string{"path", "totalSize", "min", "tree"} {
 		if payload[key] == nil {
-			t.Fatalf("json missing %q key: %s", key, lines[0])
+			t.Fatalf("json missing %q key: %s", key, line)
 		}
 	}
 	if payload["items"] != nil {
-		t.Fatalf("json must not include items key: %s", lines[0])
+		t.Fatalf("json must not include items key: %s", line)
+	}
+	if payload["threshold"] != nil {
+		t.Fatalf("json must not include threshold key (renamed to min): %s", line)
 	}
 	var path string
 	if err := json.Unmarshal(payload["path"], &path); err != nil || path != req.FixtureDir {
 		t.Fatalf("json path: expected %q, got %q err=%v", req.FixtureDir, path, err)
+	}
+	var min int64
+	if err := json.Unmarshal(payload["min"], &min); err != nil || min != 1 {
+		t.Fatalf("json min: expected 1, got %d err=%v", min, err)
 	}
 	var totalSize int64
 	if err := json.Unmarshal(payload["totalSize"], &totalSize); err != nil || totalSize != 500 {

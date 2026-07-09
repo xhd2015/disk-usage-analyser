@@ -1,9 +1,13 @@
 # Scan CLI
 
-CLI tests for `disk-usage-analyser scan [PATH] [--json] [--threshold SIZE] [--max-depth N]`:
-recursive directory tree with size annotations, threshold display filtering, depth limits,
-in-memory `GlobalCache` deduplication, human-readable tree or nested JSON `TreeResult`, and
-`run` dispatch before the default web-server branch.
+CLI tests for the two-phase `disk-usage-analyser scan` pipeline:
+
+1. **Phase 1 — TreeSource**: live FS discovery, or load a saved JSON via `--inspect FILE`.
+2. **Phase 2 — View**: shared tree formatting and optional match ranking (`--top` / `--find` / `--suffix` / `--at`).
+
+Covers `--min` (replaces `--threshold`), text and JSON output, inspect defaults, Option B
+(tree section + match section when query flags warrant it), dispatch before the web-server
+branch, and removal of the standalone `inspect` subcommand.
 
 ## Version
 
@@ -11,94 +15,146 @@ in-memory `GlobalCache` deduplication, human-readable tree or nested JSON `TreeR
 
 # DSN (Domain Specific Notion)
 
-The **scan command** walks a directory root recursively and builds a **TreeNode** tree.
-Each node carries `name`, absolute `path`, recursive **Size** (files: `st_size`; directories:
-sum of all nested content), `isDir`, `depth`, and **Children** sorted by size descending with
-directories before files when sizes tie. **TreeResult** aggregates absolute **Path**,
-**TotalSize** (full recursive bytes at root — includes nodes hidden by threshold or beyond
-display depth), **Threshold**, **MaxDepth**, and the root **Tree** (name `"."`).
+The **scan command** is a **two-phase** pipeline.
 
-**Counting** always includes every file and directory. **Displaying** omits a node when
-`size < threshold` (files and directories). **MaxDepth** limits branch expansion (`0` =
-unlimited); ancestor sizes still include bytes from deeper levels even when children are not
-shown.
+**Phase 1 (TreeSource)** produces a **TreeResult**: absolute **Path**, **TotalSize** (full
+recursive root bytes), **Min** (display filter used when the tree was produced or re-viewed),
+**MaxDepth**, and nested **Tree** (root name `"."`). Sources:
 
-**Scan** uses the shared **GlobalCache** / **CacheEntry** design: absolute path keys, progress
-subscribers, and concurrent subtree deduplication. **RunCLI** resolves `PATH` (default: current
-working directory), parses `--threshold` (default `1M`, compact binary sizes) and `--max-depth`
-(default `3` text, `24` with `--json`), supports `--json` for one nested JSON object (no flat
-`items` key), and prints a summary block (`PATH`, `TOTAL`, `THRESHOLD`, `MAX-DEPTH`), blank
-line, then `tree(1)` box-drawing: name immediately after `├──`/`└──` (dirs with trailing `/`),
-sizes in a left-aligned column after padding (no brackets; `FormatCompactHumanSize` values such
-as `400B`, `1.1M`). Column alignment uses a two-pass layout: `maxLen(prefix+connector+name)` over
-visible rows, pad each row to that width, then at least two spaces before the size. Root `.` has
-no size. All user-facing stdout ends with a trailing blank line after the last content line.
-**run.Run** wires `scan` before the web-server branch. Invalid threshold values exit non-zero
-with a clear error.
+- **LiveTreeSource**: walk the filesystem from `PATH` (default: cwd) with concurrent
+  **GlobalCache** deduplication. Counting always includes every file and directory. Live
+  **emission** omits nodes with `size < min` and stops expanding past **maxDepth** (`0` =
+  unlimited). Live defaults: **min** `1M`, text **maxDepth** `3`, JSON capture **maxDepth**
+  `24`.
+- **JSONTreeSource** (`--inspect FILE`, FILE `-` = stdin): decode a previously captured
+  TreeResult JSON (field **`min`**, not `threshold`). No FS walk.
+
+**Phase 2 (View)** renders a **tree section** and, when warranted, a **match section**
+(Option B):
+
+- Tree-only when no `--top` / `--find` / `--suffix` (including **`--at` alone**, which focuses
+  the tree on a subtree with **no** match section).
+- Tree **and** matches when `--top` and/or `--find` and/or `--suffix` (also when combined with
+  `--at`). Match ranking uses the **full in-memory tree**, not the view max-depth prune.
+  Default **`--top`** cap is **20** when the match section is active. Root is skipped in
+  global rankings unless **`--include-root`**.
+- Inspect defaults for the view: **maxDepth 1**, **min 0**. Live query views keep live min /
+  depth defaults unless overridden.
+- Human summary: `PATH:`, `TOTAL:`, `MIN:`, `MAX-DEPTH:`, and **`SOURCE:`** only when
+  `--inspect`. Then blank line, box-drawing tree (name then aligned size column). Match
+  block header `TOP N` then lines `size  kind  d=N  path`. Stdout ends with a trailing blank
+  line.
+- **`--json`**: pure capture (live, no query/view extras) → bare **TreeResult** with JSON
+  field **`min`**. Otherwise → **ViewResult** (`scanPath`, `totalSize`, `min`, `maxDepth`,
+  optional `sourceFile`, `tree`, `matches`).
+
+**CLI**: only subcommand `scan` (no standalone `inspect`). Flags: `--inspect`, `--json`,
+`--min`, `--max-depth`, `--top`, `--at`, `--find`, `--suffix`, `--include-root`, `-h/--help`.
+**Removed**: `--threshold`, subcommand `inspect`. Invalid `--min` values and inspect load
+errors exit non-zero. **`run.Run`** routes `scan` (including `--inspect`) before the web
+server branch.
 
 ## Decision Tree
 
 ```
 scan-cli/
-├── tree/                              # Scan API: TreeResult + ScanOptions
-│   ├── basic-nested/                  # nested children with correct recursive sizes
-│   ├── threshold-default/             # sub-1M nodes omitted from tree display
-│   ├── threshold-override/            # --threshold 10M filters display
-│   ├── max-depth-2/                   # branches stop at depth 2; sizes include deeper bytes
-│   ├── max-depth-zero/                # maxDepth 0 = unlimited expansion
-│   ├── max-depth-one/                 # only immediate children shown
-│   └── root-total-includes-filtered/  # totalSize counts sub-threshold bytes
-├── basics/                            # fundamental tree shapes (default scan opts)
-│   ├── empty-dir/                     # empty root: no children, totalSize 0
-│   ├── files-only/                    # two root files
-│   ├── mixed/                         # root file + subdir with nested file
-│   └── nested-dirs/                   # subdir aggregating nested subtree bytes
+├── tree/                                   # Live Scan API: TreeResult + ScanOptions
+│   ├── basic-nested/                       # nested children with correct recursive sizes
+│   ├── min-default/                        # default min 1M hides sub-1M nodes
+│   ├── min-override/                       # Min=10M filters display
+│   ├── max-depth-2/                        # branches stop at depth 2; sizes include deeper
+│   ├── max-depth-zero/                     # maxDepth 0 = unlimited expansion
+│   ├── max-depth-one/                      # only immediate children shown
+│   └── root-total-includes-filtered/       # totalSize counts sub-min bytes
+├── basics/                                 # fundamental tree shapes (min 0)
+│   ├── empty-dir/
+│   ├── files-only/
+│   ├── mixed/
+│   └── nested-dirs/
 ├── sorting/
-│   └── by-size/                       # root children sorted size desc; dirs before files on tie
+│   └── by-size/
 ├── errors/
-│   ├── missing-path/                  # non-existent PATH exits non-zero
-│   ├── not-a-directory/               # regular file as PATH is rejected
-│   └── invalid-threshold/             # --threshold foo exits non-zero
-└── cli/
-    ├── default-cwd/                   # no args: cwd scan; summary + tree lines
-    ├── json-flag/                     # --json emits TreeResult JSON with nested tree
-    ├── json-tree-shape/               # --json has tree/threshold/maxDepth; no items
-    ├── text-tree-format/              # text summary + `.` + box-drawing + aligned size column
-    ├── text-tree-alignment/           # nested fixture: sizes share one column across name lengths
-    ├── help/                          # -h documents scan, PATH, --json
-    ├── help-flags/                    # -h documents --threshold, --max-depth
-    ├── explicit-path/                 # positional PATH scans that directory
-    └── dispatch/                      # run.RunWithOptions routes scan without web server
+│   ├── missing-path/
+│   ├── not-a-directory/
+│   ├── invalid-min/                        # --min foo exits non-zero
+│   ├── unknown-threshold-flag/             # --threshold rejected (no alias)
+│   ├── inspect-missing-file/
+│   ├── inspect-invalid-json/
+│   └── inspect-with-path/                  # --inspect + positional PATH → error
+├── cli/                                    # live CLI surface (no query section)
+│   ├── default-cwd/
+│   ├── json-flag/                          # capture TreeResult; field min
+│   ├── json-tree-shape/                    # path/totalSize/min/maxDepth/tree; no items
+│   ├── text-tree-format/                   # PATH/TOTAL/MIN/MAX-DEPTH + aligned tree
+│   ├── text-tree-alignment/
+│   ├── help/                               # scan, PATH, --json
+│   ├── help-flags/                         # --min, --max-depth (not --threshold)
+│   ├── help-min-and-inspect/               # --inspect, --top, --find, --suffix, --at
+│   ├── explicit-path/
+│   ├── dispatch/                           # run.Run scan without web server
+│   ├── dispatch-inspect/                   # run.Run scan --inspect without web server
+│   └── root-help-no-inspect-subcommand/    # root -h has no inspect subcommand
+├── inspect/                                # Phase 1 = JSONTreeSource
+│   ├── default-depth-1/                    # tree max-depth 1; SOURCE; min 0
+│   ├── max-depth-2/                        # deeper nodes appear
+│   ├── top-option-b/                       # tree section + TOP 2 matches
+│   ├── at-alone/                           # focused tree; no TOP
+│   ├── at-with-top/                        # focused tree + match section
+│   ├── find/                               # tree + find matches
+│   ├── suffix/                             # tree + suffix matches
+│   ├── json-tree-only/                     # ViewResult tree; inspect defaults
+│   └── json-view-top/                      # ViewResult tree + matches
+└── live-query/                             # live FS + match section
+    ├── top/                                # scan --top N: tree + TOP
+    └── parity-inspect/                     # live ranking matches inspect of same tree
 ```
 
 ## Test Index
 
 | Leaf | Mode | Description |
 |------|------|-------------|
-| tree/basic-nested | scan | Nested `tree.children` with correct recursive sizes at multiple depths. |
-| tree/threshold-default | scan | Default 1M threshold hides sub-1M nodes from display. |
-| tree/threshold-override | scan | `Threshold=10M` hides nodes below 10M. |
+| tree/basic-nested | scan | Nested `tree.children` with correct recursive sizes. |
+| tree/min-default | scan | Default min 1M hides sub-1M nodes from display. |
+| tree/min-override | scan | `Min=10M` hides nodes below 10M. |
 | tree/max-depth-2 | scan | `MaxDepth=2` truncates branches; ancestor sizes include deeper bytes. |
-| tree/max-depth-zero | scan | `MaxDepth=0` shows all levels (subject to threshold). |
+| tree/max-depth-zero | scan | `MaxDepth=0` shows all levels (subject to min). |
 | tree/max-depth-one | scan | `MaxDepth=1` shows only root immediate children. |
-| tree/root-total-includes-filtered | scan | `totalSize` includes sub-threshold bytes not shown in tree. |
-| basics/empty-dir | scan | Empty root: `tree.children` empty, `totalSize` 0, absolute `path`. |
+| tree/root-total-includes-filtered | scan | `totalSize` includes sub-min bytes not shown in tree. |
+| basics/empty-dir | scan | Empty root: `tree.children` empty, `totalSize` 0. |
 | basics/files-only | scan | Two root files (100 B, 200 B): `totalSize` 300. |
 | basics/mixed | scan | Root file 50 B + subdir with 150 B nested file: `totalSize` 200. |
-| basics/nested-dirs | scan | `subdir/a` 100 B + `subdir/b/nested` 200 B: one dir child 300 B. |
-| sorting/by-size | scan | Root children: descending size; dirs precede files when sizes tie. |
-| errors/missing-path | cli | Non-existent PATH returns non-zero exit and error. |
-| errors/not-a-directory | cli | Regular file as PATH returns error mentioning not a directory. |
-| errors/invalid-threshold | cli | `--threshold foo` returns non-zero exit and clear error. |
-| cli/default-cwd | cli | No args with cwd in fixture: summary lines + tree output. |
-| cli/json-flag | cli | `--json` + fixture dir: valid JSON with nested `tree` and sizes. |
-| cli/json-tree-shape | cli | `--json` includes `tree`, `threshold`, `maxDepth`; no `items`. |
-| cli/text-tree-format | cli | Text has PATH/TOTAL/THRESHOLD/MAX-DEPTH, `.`, and name-then-aligned-size tree lines. |
-| cli/text-tree-alignment | cli | Nested tree with varied name lengths; all size values start at the same column. |
-| cli/help | cli | `-h` prints usage mentioning `scan`, `[PATH]`, `--json`. |
-| cli/help-flags | cli | `-h` documents `--threshold` and `--max-depth`. |
-| cli/explicit-path | cli | Explicit fixture path: PATH line matches absolute directory. |
-| cli/dispatch | dispatch | `run.RunWithOptions` with `scan` never starts the web server. |
+| basics/nested-dirs | scan | Nested dirs roll up to one dir child 300 B. |
+| sorting/by-size | scan | Root children: size desc; dirs before files on tie. |
+| errors/missing-path | cli | Non-existent PATH → non-zero exit. |
+| errors/not-a-directory | cli | File as PATH → not a directory error. |
+| errors/invalid-min | cli | `--min foo` → non-zero exit and clear error. |
+| errors/unknown-threshold-flag | cli | `--threshold` is not accepted (breaking rename). |
+| errors/inspect-missing-file | cli | Missing inspect FILE → non-zero + error. |
+| errors/inspect-invalid-json | cli | Corrupt inspect JSON → non-zero + error. |
+| errors/inspect-with-path | cli | `--inspect FILE` with positional PATH → non-zero + clear error. |
+| cli/default-cwd | cli | No args: cwd scan; summary uses `MIN:`. |
+| cli/json-flag | cli | `--json` capture TreeResult; sizes nested under `tree`. |
+| cli/json-tree-shape | cli | Capture JSON has `min` (not `threshold`), `maxDepth` 24. |
+| cli/text-tree-format | cli | Text summary PATH/TOTAL/MIN/MAX-DEPTH + aligned tree. |
+| cli/text-tree-alignment | cli | Nested tree sizes share one column. |
+| cli/help | cli | `-h` documents scan, `[PATH]`, `--json`. |
+| cli/help-flags | cli | `-h` documents `--min` and `--max-depth`; not `--threshold`. |
+| cli/help-min-and-inspect | cli | `-h` documents `--inspect`, `--top`, `--at`, `--find`, `--suffix`. |
+| cli/explicit-path | cli | Positional PATH; `MIN:` in summary. |
+| cli/dispatch | dispatch | `run.RunWithOptions(["scan", ...])` does not start web server. |
+| cli/dispatch-inspect | dispatch | `run.RunWithOptions(["scan", "--inspect", file])` works offline. |
+| cli/root-help-no-inspect-subcommand | dispatch | Root `-h` does not list `inspect` as a subcommand. |
+| inspect/default-depth-1 | cli | Inspect text: depth-1 children only; SOURCE; MIN 0; trailing blank. |
+| inspect/max-depth-2 | cli | `--max-depth 2` shows depth-2 nodes. |
+| inspect/top-option-b | cli | Tree section present and TOP 2 (root skipped). |
+| inspect/at-alone | cli | Focused subtree tree; no TOP section. |
+| inspect/at-with-top | cli | Focused tree plus match section. |
+| inspect/find | cli | Tree + find match lines. |
+| inspect/suffix | cli | Tree + suffix match lines. |
+| inspect/json-tree-only | cli | Inspect `--json` ViewResult with tree; defaults. |
+| inspect/json-view-top | cli | Inspect `--json --top` ViewResult with matches. |
+| live-query/top | cli | Live `--top` emits tree + TOP section. |
+| live-query/parity-inspect | cli | Live top ranking agrees with inspect of equivalent capture. |
 
 ## How to Run
 

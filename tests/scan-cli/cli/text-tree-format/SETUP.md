@@ -5,13 +5,13 @@
 ## Steps
 
 1. Write `big.txt` (400 bytes) and `small.txt` (100 bytes) in the fixture root.
-2. Run `RunCLI <fixture>` (text mode, default threshold 1M, maxDepth 3).
+2. Run `RunCLI --min 1B <fixture>` (text mode).
 
 ```go
 func Setup(t *testing.T, req *Request) error {
 	writeSizedFile(t, req.FixtureDir, "big.txt", 400)
 	writeSizedFile(t, req.FixtureDir, "small.txt", 100)
-	req.Args = []string{"--threshold", "1B", req.FixtureDir}
+	req.Args = []string{"--min", "1B", req.FixtureDir}
 	return nil
 }
 ```

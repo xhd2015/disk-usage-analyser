@@ -1,6 +1,6 @@
 # Scenario
 
-**Leaf**: `-h` documents threshold and max-depth flags
+**Leaf**: `-h` documents `--min` and `--max-depth` (not `--threshold`)
 
 ## Steps
 

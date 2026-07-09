@@ -1,6 +1,6 @@
 # Scenario
 
-**Leaf**: maxDepth 0 expands all branch levels (subject to threshold)
+**Leaf**: maxDepth 0 expands all branch levels (subject to min)
 
 ## Steps
 
@@ -14,7 +14,7 @@ func Setup(t *testing.T, req *Request) error {
 	mkdir(t, req.FixtureDir, "a/b/c")
 	writeSizedFile(t, req.FixtureDir, "a/b/c/deep.bin", 42)
 	req.ScanOpts = &usagescan.ScanOptions{
-		Threshold: 0,
+		Min: 0,
 		MaxDepth:  0,
 	}
 	return nil

@@ -3,7 +3,7 @@
 ```
 PATH: __PATH__
 TOTAL: 2M
-THRESHOLD: 1M
+MIN: 1M
 MAX-DEPTH: 3
 
 .
@@ -14,7 +14,7 @@ MAX-DEPTH: 3
 ## Expected
 
 - Exit code 0.
-- Stdout contains summary lines: `PATH:`, `TOTAL:`, `THRESHOLD:`, `MAX-DEPTH:`.
+- Stdout contains summary lines: `PATH:`, `TOTAL:`, `MIN:`, `MAX-DEPTH:`.
 - Stdout contains root tree line `.` and box-drawing child with name then aligned size (no brackets).
 - Stdout ends with a trailing blank line after the last content line.
 
@@ -43,7 +43,7 @@ __PATH__: type=string
 ---
 PATH: __PATH__
 TOTAL: 2M
-THRESHOLD: 1M
+MIN: 1M
 MAX-DEPTH: 3
 
 .

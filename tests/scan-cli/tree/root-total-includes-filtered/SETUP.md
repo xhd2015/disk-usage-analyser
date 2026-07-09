@@ -1,11 +1,11 @@
 # Scenario
 
-**Leaf**: root totalSize counts sub-threshold bytes omitted from tree display
+**Leaf**: root totalSize counts sub-min bytes omitted from tree display
 
 ## Steps
 
 1. Write `visible.bin` (2 MiB) and `hidden.bin` (500 bytes) at fixture root.
-2. Run `usagescan.Scan` with default threshold `1M`.
+2. Run `usagescan.Scan` with default min `1M`.
 
 ```go
 func Setup(t *testing.T, req *Request) error {

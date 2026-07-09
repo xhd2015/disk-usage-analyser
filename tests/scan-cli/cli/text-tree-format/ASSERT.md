@@ -3,7 +3,7 @@
 ```
 PATH: __PATH__
 TOTAL: 500 B
-THRESHOLD: 1B
+MIN: 1B
 MAX-DEPTH: 3
 
 .
@@ -15,7 +15,7 @@ MAX-DEPTH: 3
 ## Expected
 
 - Exit code 0.
-- Summary block with `PATH`, `TOTAL`, `THRESHOLD`, `MAX-DEPTH`.
+- Summary block with `PATH`, `TOTAL`, `MIN`, `MAX-DEPTH`.
 - Root line `.` followed by box-drawing branches: name first, then aligned size column (no brackets).
 - Dirs show trailing `/`; files do not.
 - Stdout ends with a trailing blank line.
@@ -45,7 +45,7 @@ __PATH__: type=string
 ---
 PATH: __PATH__
 TOTAL: 500 B
-THRESHOLD: 1B
+MIN: 1B
 MAX-DEPTH: 3
 
 .

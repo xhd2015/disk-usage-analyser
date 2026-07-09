@@ -14,7 +14,7 @@ func Setup(t *testing.T, req *Request) error {
 	mkdir(t, req.FixtureDir, "d1/d2")
 	writeSizedFile(t, req.FixtureDir, "d1/d2/leaf.bin", 1000)
 	req.ScanOpts = &usagescan.ScanOptions{
-		Threshold: 0,
+		Min: 0,
 		MaxDepth:  2,
 	}
 	return nil

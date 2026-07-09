@@ -3,7 +3,7 @@
 ```
 PATH: __PATH__
 TOTAL: 350 B
-THRESHOLD: 1B
+MIN: 1B
 MAX-DEPTH: 3
 
 .
@@ -47,7 +47,7 @@ __PATH__: type=string
 ---
 PATH: __PATH__
 TOTAL: 350 B
-THRESHOLD: 1B
+MIN: 1B
 MAX-DEPTH: 3
 
 .

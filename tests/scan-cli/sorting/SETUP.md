@@ -14,6 +14,7 @@ Scan -> build tree -> sort each node's children by size desc -> dirs before file
 ## Context
 
 - Tie-break: when two children share the same `size`, directories precede files.
+- Uses `Min: 0` so all fixture nodes appear in the tree.
 
 ```go
 import "disk-usage-analyser/usagescan"
@@ -21,8 +22,8 @@ import "disk-usage-analyser/usagescan"
 func Setup(t *testing.T, req *Request) error {
 	req.Mode = "scan"
 	req.ScanOpts = &usagescan.ScanOptions{
-		Threshold: 0,
-		MaxDepth:  3,
+		Min:      0,
+		MaxDepth: 3,
 	}
 	return nil
 }

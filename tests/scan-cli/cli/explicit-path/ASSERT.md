@@ -3,7 +3,7 @@
 ```
 PATH: __PATH__
 TOTAL: 128 B
-THRESHOLD: 1B
+MIN: 1B
 MAX-DEPTH: 3
 
 .
@@ -15,7 +15,7 @@ MAX-DEPTH: 3
 
 - Exit code 0.
 - `PATH:` line includes the absolute fixture directory.
-- Summary includes `TOTAL:`, `THRESHOLD:`, `MAX-DEPTH:`.
+- Summary includes `TOTAL:`, `MIN:`, `MAX-DEPTH:`.
 - Tree output shows `data.bin` on a box-drawing line with aligned size column (no brackets).
 
 ## Exit Code
@@ -43,7 +43,7 @@ __PATH__: type=string
 ---
 PATH: __PATH__
 TOTAL: 128 B
-THRESHOLD: 1B
+MIN: 1B
 MAX-DEPTH: 3
 
 .

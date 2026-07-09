@@ -38,7 +38,7 @@ func ScanTree(path string, opts ScanOptions) (TreeResult, error) {
 	return TreeResult{
 		Path:      absPath,
 		TotalSize: totalSize,
-		Threshold: opts.Threshold,
+		Min:       opts.Min,
 		MaxDepth:  opts.MaxDepth,
 		Tree:      tree,
 	}, nil
@@ -83,7 +83,7 @@ func buildTreeNode(ctx context.Context, absPath, name string, depth int, opts Sc
 			continue
 		}
 		fileSize := info.Size()
-		if !passesThreshold(fileSize, opts.Threshold) {
+		if !passesMin(fileSize, opts.Min) {
 			continue
 		}
 		childPath := filepath.Join(absPath, entry.Name())
@@ -99,7 +99,7 @@ func buildTreeNode(ctx context.Context, absPath, name string, depth int, opts Sc
 	for _, entry := range subDirs {
 		childPath := filepath.Join(absPath, entry.Name())
 		childSize := getDirSizeWithCache(ctx, childPath, nil)
-		if !passesThreshold(childSize, opts.Threshold) {
+		if !passesMin(childSize, opts.Min) {
 			continue
 		}
 		child := buildTreeNode(ctx, childPath, entry.Name(), depth+1, opts)
@@ -111,8 +111,8 @@ func buildTreeNode(ctx context.Context, absPath, name string, depth int, opts Sc
 	return node
 }
 
-func passesThreshold(size, threshold int64) bool {
-	return threshold == 0 || size >= threshold
+func passesMin(size, min int64) bool {
+	return min == 0 || size >= min
 }
 
 func sortTreeChildren(children []TreeNode) {

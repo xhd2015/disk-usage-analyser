@@ -10,7 +10,7 @@ import (
 func ParseCompactHumanSize(s string) (int64, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
-		return 0, fmt.Errorf("invalid threshold: empty size string")
+		return 0, fmt.Errorf("invalid min size: empty size string")
 	}
 
 	upper := strings.ToUpper(s)
@@ -37,16 +37,16 @@ func ParseCompactHumanSize(s string) (int64, error) {
 		}
 		numStr := strings.TrimSpace(s[:len(s)-len(u.suffix)])
 		if numStr == "" {
-			return 0, fmt.Errorf("invalid threshold: %q", s)
+			return 0, fmt.Errorf("invalid min size: %q", s)
 		}
 		val, err := strconv.ParseFloat(numStr, 64)
 		if err != nil {
-			return 0, fmt.Errorf("invalid threshold: %q", s)
+			return 0, fmt.Errorf("invalid min size: %q", s)
 		}
 		return int64(val * float64(u.mult)), nil
 	}
 
-	return 0, fmt.Errorf("invalid threshold: %q", s)
+	return 0, fmt.Errorf("invalid min size: %q", s)
 }
 
 // FormatCompactHumanSize formats bytes as compact binary sizes (e.g. 400B, 65.6G).

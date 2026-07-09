@@ -16,7 +16,7 @@ func Setup(t *testing.T, req *Request) error {
 	writeSizedFile(t, req.FixtureDir, "alpha/beta/deep.bin", 200)
 	writeSizedFile(t, req.FixtureDir, "gamma.txt", 300)
 	req.ScanOpts = &usagescan.ScanOptions{
-		Threshold: 0,
+		Min: 0,
 		MaxDepth:  3,
 	}
 	return nil
