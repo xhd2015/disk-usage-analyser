@@ -11,6 +11,7 @@ import (
 	"disk-usage-analyser/analyse"
 	"disk-usage-analyser/explain"
 	"disk-usage-analyser/server"
+	"disk-usage-analyser/skill"
 	"disk-usage-analyser/tmpfiles"
 	"disk-usage-analyser/usagescan"
 
@@ -26,12 +27,19 @@ Subcommands:
   scan [PATH]       Walk a directory and emit a size tree (text or --json); use scan --inspect FILE to query offline
   explain [PATH]    Explain reclaim kind, size breakdown, and safe-to-reclaim advice for a path
   tmp-files scan    Scan temporary file candidates
+  skill --show [topic]
+                    Print embedded analyse-my-disk-space skill or nested topic
+  skill --install   Install skill files to agent skill directories
+  skill --list      List skill name and topic paths
+  install …         Alias of skill --install
 
 Server options:
   --dev             Run the web UI in development mode
   --component NAME  Serve a single component (use --component list to list)
 
 Run disk-usage-analyser <command> --help for command-specific options.
+Run disk-usage-analyser skill --help for skill actions.
+Run disk-usage-analyser skill --install --help for install flags.
 `
 
 type Options struct {
@@ -59,6 +67,14 @@ func RunWithOptions(ctx context.Context, args []string, opts Options) error {
 	stderr := opts.Stderr
 	if stderr == nil {
 		stderr = os.Stderr
+	}
+
+	if len(args) > 0 && args[0] == "skill" {
+		return skill.Handle(args[1:])
+	}
+	if len(args) > 0 && args[0] == "install" {
+		// top-level install alias → skill --install
+		return skill.HandleInstall(args[1:])
 	}
 
 	if len(args) > 0 && args[0] == "scan" {

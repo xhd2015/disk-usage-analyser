@@ -1,6 +1,18 @@
+---
+name: analyse-my-disk-space/android-images
+description: >
+  Android emulator (AVD) and SDK disk layout, reclaim options (wipe vs delete),
+  and offline scan --inspect queries for .qcow2 / ram.bin / system-images.
+  Load when disk analysis hits ~/.android, Library/Android, or emulator image suffixes.
+---
+
 # Android images and AVDs
 
-Reference for inspecting and reclaiming Android emulator (AVD) disk usage discovered during a home scan. Complements the main [SKILL.md](../SKILL.md) playbook.
+Reference for inspecting and reclaiming Android emulator (AVD) disk usage discovered during a home scan. Complements the main skill index:
+
+```bash
+disk-usage-analyser skill --show
+```
 
 ## Layout on disk
 
@@ -31,21 +43,21 @@ Hardware and image selection live in `<name>.avd/config.ini` (API level, ABI, RA
 
 ## What usually consumes space
 
-Prefer **offline** analysis of the home capture from [SKILL.md](../SKILL.md):
+Prefer **offline** analysis of the home capture from the root skill:
 
 ```bash
 disk-usage-analyser scan ~ --json --max-depth 6 > /tmp/disk-scan.json
-disk-usage-analyser inspect /tmp/disk-scan.json --find .android
-disk-usage-analyser inspect /tmp/disk-scan.json --at ~/.android
-disk-usage-analyser inspect /tmp/disk-scan.json --suffix .qcow2 --min-size 50M
-disk-usage-analyser inspect /tmp/disk-scan.json --find Android/sdk
+disk-usage-analyser scan --inspect /tmp/disk-scan.json --find .android
+disk-usage-analyser scan --inspect /tmp/disk-scan.json --at ~/.android
+disk-usage-analyser scan --inspect /tmp/disk-scan.json --suffix .qcow2 --min 50M
+disk-usage-analyser scan --inspect /tmp/disk-scan.json --find Android/sdk
 ```
 
 Only if that tree is missing or truncated, run **one** targeted scan (do not chain multiple shallow scans — each `scan` walks fully; `--max-depth` only limits tree emission):
 
 ```bash
 disk-usage-analyser scan ~/.android --json --max-depth 6 > /tmp/android-scan.json
-disk-usage-analyser inspect /tmp/android-scan.json --top 30
+disk-usage-analyser scan --inspect /tmp/android-scan.json --top 30
 ```
 
 Typical large files **inside** one AVD directory:

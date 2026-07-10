@@ -5,13 +5,28 @@ description: >
   then inspect/query that JSON offline via disk-usage-analyser scan --inspect (no
   multi-phase re-scans). Use when the user asks to analyse disk space, free space,
   what's using storage, or runs a scan workflow. For Android emulator/SDK/AVD
-  paths or disk image suffixes, also load topics/ANDROID-IMAGES.md.
+  paths or disk image suffixes, also load: disk-usage-analyser skill --show android-images.
 ---
 
 # SKILL: Analyse disk usage with scan + --inspect
 
 Agent playbook for investigating disk usage with `disk-usage-analyser scan` (live walk
 or offline `--inspect`).
+
+## Topics
+
+Load nested topics with `skill --show` (both flag orders work):
+
+```bash
+disk-usage-analyser skill --show
+disk-usage-analyser skill --show android-images
+disk-usage-analyser skill android-images --show
+disk-usage-analyser skill --list
+```
+
+| Path | When to load |
+|------|----------------|
+| `android-images` | Paths under `~/.android/`, `~/Library/Android/`, AVD names, emulator image suffixes (`.qcow2`, `ram.bin`, …) |
 
 ## Important: one scan, then offline analysis
 
@@ -66,7 +81,9 @@ Each live `scan` invocation walks the filesystem **fully** to compute sizes. `--
 
 When the scan or user focuses on **Android** storage, load and follow:
 
-**[topics/ANDROID-IMAGES.md](topics/ANDROID-IMAGES.md)**
+```bash
+disk-usage-analyser skill --show android-images
+```
 
 Load that topic when any of the following apply:
 
@@ -74,7 +91,7 @@ Load that topic when any of the following apply:
 - Mentions of AVD, emulator, Android SDK, system-images, `avdmanager`, `sdkmanager`
 - Disk image / snapshot suffixes typical of emulator VMs: `.img`, `.qcow2`, `ram.bin`, `sdcard.img`, `userdata-qemu.img*`, `cache.img*`, `encryptionkey.img*`
 
-Prefer querying the **existing** home JSON with `scan --inspect --find` / `--suffix` / `--at`. Only scan `~/.android` alone if the home tree did not cover it. That doc covers AVD wipe vs delete, recreate, and backup/restore.
+Prefer querying the **existing** home JSON with `scan --inspect --find` / `--suffix` / `--at`. Only scan `~/.android` alone if the home tree did not cover it. That topic covers AVD wipe vs delete, recreate, and backup/restore.
 
 ## CLI reference
 
@@ -152,6 +169,6 @@ Then a box-drawing tree (name, then aligned size column). When `--top` / `--find
 - Depth **6** is usually enough for reclaim targets under `~`. JSON stays small (a few MB for a full home).
 - `totalSize` at every included dir already reflects the full subtree — even when children are omitted past max-depth.
 - Use `--min 0` on scan only when hunting small but numerous files (larger JSON).
-- Avoid `--max-depth 1` as a first **live** scan if you plan to drill: you will just re-walk everything again. Prefer capture at 6 + offline.
+- Avoid `--max-depth 1` as a first **live** scan if you plan to drill: you will just re-walk everything again. Prefer capture at 6 + inspect.
 - Compare CLI totals with the web app when the user wants visual confirmation.
-- If Android/AVD or image suffixes appear in top consumers, open **topics/ANDROID-IMAGES.md** before recommending delete.
+- If Android/AVD or image suffixes appear in top consumers, open **android-images** (`skill --show android-images`) before recommending delete.
