@@ -9,13 +9,13 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/xhd2015/dot-pkgs/go-pkgs/file/detect"
 	"github.com/xhd2015/dot-pkgs/go-pkgs/file/remotefs"
 	"github.com/xhd2015/dot-pkgs/go-pkgs/git/scan_repo"
+	lessflags "github.com/xhd2015/less-flags"
 )
 
 type BinaryHit struct {
@@ -92,7 +92,8 @@ func RunCLI(ctx context.Context, args []string, opts CLIOptions) (*ScanResult, i
 		opts.Stderr = os.Stderr
 	}
 
-	if len(args) == 0 {
+	// Parent-level help: empty args, -h, and --help (before requiring "scan").
+	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
 		fmt.Fprint(stdout, help)
 		return nil, 0, nil
 	}
@@ -118,53 +119,43 @@ func RunCLI(ctx context.Context, args []string, opts CLIOptions) (*ScanResult, i
 
 func parseScanArgs(args []string, homeDir string) (scanOptions, bool, error) {
 	var opts scanOptions
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if name, ok := extractNameValue(arg); ok {
-			opts.names = append(opts.names, name)
-			continue
+	var goBinaries bool // accepted selector; equivalent to default binary scan today
+	var roots []string
+	var names []string
+
+	remain, err := lessflags.
+		Bool("--go-binaries", &goBinaries).
+		StringSlice("--name", &names).
+		StringSlice("--root", &roots).
+		Int("--max-depth", &opts.maxDepth).
+		Bool("--json", &opts.json).
+		Bool("-v,--verbose", &opts.verbose).
+		HelpFunc("-h,--help", func() {}).
+		HelpNoExit().
+		Parse(args)
+	if err == lessflags.ErrHelp {
+		return opts, true, nil
+	}
+	if err != nil {
+		return opts, false, err
+	}
+	if len(remain) > 0 {
+		return opts, false, fmt.Errorf("unknown scan option: %s", remain[0])
+	}
+	if opts.maxDepth < 0 {
+		return opts, false, fmt.Errorf("--max-depth must be a non-negative integer")
+	}
+	_ = goBinaries
+	opts.names = names
+	for _, r := range roots {
+		root, err := expandPath(r, homeDir)
+		if err != nil {
+			return opts, false, err
 		}
-		switch arg {
-		case "-h", "--help":
-			return opts, true, nil
-		case "--go-binaries":
-		case "--name":
-			if i+1 >= len(args) {
-				return opts, false, fmt.Errorf("--name requires a value")
-			}
-			i++
-			opts.names = append(opts.names, args[i])
-		case "--json":
-			opts.json = true
-		case "-v", "--verbose":
-			opts.verbose = true
-		case "--root":
-			if i+1 >= len(args) {
-				return opts, false, fmt.Errorf("--root requires a path")
-			}
-			i++
-			root, err := expandPath(args[i], homeDir)
-			if err != nil {
-				return opts, false, err
-			}
-			opts.roots = append(opts.roots, root)
-		case "--max-depth":
-			if i+1 >= len(args) {
-				return opts, false, fmt.Errorf("--max-depth requires a value")
-			}
-			i++
-			n, err := strconv.Atoi(args[i])
-			if err != nil || n < 0 {
-				return opts, false, fmt.Errorf("--max-depth must be a non-negative integer")
-			}
-			opts.maxDepth = n
-		default:
-			return opts, false, fmt.Errorf("unknown scan option: %s", arg)
-		}
+		opts.roots = append(opts.roots, root)
 	}
 	if len(opts.roots) == 0 {
 		if homeDir == "" {
-			var err error
 			homeDir, err = os.UserHomeDir()
 			if err != nil {
 				return opts, false, err
@@ -690,17 +681,6 @@ func FormatHumanSize(size int64) string {
 		}
 	}
 	return fmt.Sprintf("%.1f EB", value/1024)
-}
-
-func extractNameValue(arg string) (string, bool) {
-	if strings.HasPrefix(arg, "--name=") {
-		val := arg[len("--name="):]
-		if val == "" {
-			return "", false
-		}
-		return val, true
-	}
-	return "", false
 }
 
 func makeNameSet(names []string) map[string]bool {

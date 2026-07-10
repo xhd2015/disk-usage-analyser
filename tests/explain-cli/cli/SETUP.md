@@ -6,8 +6,12 @@
 # Help documents PATH, --kind, --all-kinds, --json, --color
 explain -h|--help -> usage text -> exit 0
 
-# Root help lists explain
-disk-usage-analyser -h -> subcommand list includes explain [PATH]
+# Root help lists subcommands, server flags, nested-help pointer
+disk-usage-analyser -h
+  -> subcommands: analyse | scan | explain | tmp-files
+  -> --dev, --component
+  -> … <command> --help
+  -> no StartServer
 
 # Dispatch before web server
 run.RunWithOptions(["explain", PATH]) -> explain.RunCLI (no StartServer)
@@ -24,7 +28,8 @@ run.RunWithOptions(["explain", PATH]) -> explain.RunCLI (no StartServer)
 - Help must document PATH (required unless `--kind` or `--all-kinds`), **`--kind`**
   (supported values include `xcode`, `grok`, `android-sdk`, `iterm2`, `codex`), **`--all-kinds`**,
   `--json`, and `--color` (`always|never|auto`).
-- Root help must list `explain [PATH]` as a subcommand.
+- Root help must list `explain [PATH]` among subcommands, document `--dev` / `--component`,
+  and include a nested-help pointer (`command` + `--help`).
 - Successful dispatch must not invoke the web server hook.
 
 ```go

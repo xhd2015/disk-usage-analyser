@@ -6,8 +6,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 
 	lessflags "github.com/xhd2015/less-flags"
 )
@@ -40,20 +38,15 @@ func RunCLI(args []string, opts CLIOptions) (int, error) {
 
 	var (
 		jsonOut     bool
-		minStr      string
-		maxDepth    int
-		top         int
+		minStr      *string
+		maxDepth    *int
+		top         *int
 		atPath      string
 		find        string
 		suffix      string
 		includeRoot bool
-		inspectFile string
+		inspectFile *string
 	)
-
-	maxDepth, maxDepthSet := intFlagFromArgs(args, "--max-depth")
-	top, topSet := intFlagFromArgs(args, "--top")
-	minSet := stringFlagPresent(args, "--min")
-	inspectSet := stringFlagPresent(args, "--inspect")
 
 	remain, err := lessflags.
 		Bool("--json", &jsonOut).
@@ -77,9 +70,21 @@ func RunCLI(args []string, opts CLIOptions) (int, error) {
 		return 2, err
 	}
 
-	inspectMode := inspectSet || inspectFile != ""
-	if inspectMode && inspectFile == "" {
+	maxDepthSet := maxDepth != nil
+	topSet := top != nil
+	minSet := minStr != nil
+	inspectMode := inspectFile != nil
+	if inspectMode && *inspectFile == "" {
 		return 2, fmt.Errorf("--inspect requires a FILE argument (or \"-\")")
+	}
+
+	topVal := 0
+	if top != nil {
+		topVal = *top
+	}
+	maxDepthVal := 0
+	if maxDepth != nil {
+		maxDepthVal = *maxDepth
 	}
 
 	if inspectMode {
@@ -96,7 +101,7 @@ func RunCLI(args []string, opts CLIOptions) (int, error) {
 	// Defaults for min / max-depth
 	var min int64
 	if minSet {
-		min, err = ParseCompactHumanSize(minStr)
+		min, err = ParseCompactHumanSize(*minStr)
 		if err != nil {
 			return 2, fmt.Errorf("invalid --min: %w", err)
 		}
@@ -111,13 +116,13 @@ func RunCLI(args []string, opts CLIOptions) (int, error) {
 
 	if !maxDepthSet {
 		if inspectMode {
-			maxDepth = 1
+			maxDepthVal = 1
 		} else if jsonOut && !needView {
 			// pure live JSON capture
-			maxDepth = 24
+			maxDepthVal = 24
 		} else {
 			// live text or live query view
-			maxDepth = 3
+			maxDepthVal = 3
 		}
 	}
 
@@ -129,12 +134,13 @@ func RunCLI(args []string, opts CLIOptions) (int, error) {
 	var source TreeSource
 	var sourceFile string
 	if inspectMode {
-		source = JSONTreeSource{Path: inspectFile}
-		if inspectFile != "" && inspectFile != "-" {
-			if abs, err := filepath.Abs(inspectFile); err == nil {
+		inspectPath := *inspectFile
+		source = JSONTreeSource{Path: inspectPath}
+		if inspectPath != "" && inspectPath != "-" {
+			if abs, err := filepath.Abs(inspectPath); err == nil {
 				sourceFile = abs
 			} else {
-				sourceFile = inspectFile
+				sourceFile = inspectPath
 			}
 		}
 	} else {
@@ -149,7 +155,7 @@ func RunCLI(args []string, opts CLIOptions) (int, error) {
 			}
 			scanPath = cwd
 		}
-		scanMin, scanDepth := min, maxDepth
+		scanMin, scanDepth := min, maxDepthVal
 		if wantMatches {
 			// Load full tree for match ranking; view prunes for the tree section.
 			scanMin, scanDepth = 0, 0
@@ -169,7 +175,7 @@ func RunCLI(args []string, opts CLIOptions) (int, error) {
 	if !needView {
 		// Ensure metadata reflects CLI defaults/overrides for pure live.
 		result.Min = min
-		result.MaxDepth = maxDepth
+		result.MaxDepth = maxDepthVal
 		if jsonOut {
 			return writeJSON(stdout, result)
 		}
@@ -182,8 +188,8 @@ func RunCLI(args []string, opts CLIOptions) (int, error) {
 	// Phase 2: shared view
 	viewOpts := ViewOptions{
 		Min:         min,
-		MaxDepth:    maxDepth,
-		Top:         top,
+		MaxDepth:    maxDepthVal,
+		Top:         topVal,
 		TopSet:      topSet,
 		AtPath:      atPath,
 		Find:        find,
@@ -228,39 +234,4 @@ func writeViewJSON(stdout io.Writer, result ViewResult) (int, error) {
 		return 1, err
 	}
 	return 0, nil
-}
-
-func intFlagFromArgs(args []string, name string) (int, bool) {
-	prefix := name + "="
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if arg == name {
-			if i+1 >= len(args) {
-				return 0, true
-			}
-			v, err := strconv.Atoi(args[i+1])
-			if err == nil {
-				return v, true
-			}
-			return 0, true
-		}
-		if strings.HasPrefix(arg, prefix) {
-			v, err := strconv.Atoi(strings.TrimPrefix(arg, prefix))
-			if err == nil {
-				return v, true
-			}
-			return 0, true
-		}
-	}
-	return 0, false
-}
-
-func stringFlagPresent(args []string, name string) bool {
-	prefix := name + "="
-	for _, arg := range args {
-		if arg == name || strings.HasPrefix(arg, prefix) {
-			return true
-		}
-	}
-	return false
 }

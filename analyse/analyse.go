@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/xhd2015/dot-pkgs/go-pkgs/pathfmt"
+	lessflags "github.com/xhd2015/less-flags"
 )
 
 type DirResult struct {
@@ -144,27 +145,30 @@ func RunCLI(args []string, opts CLIOptions) (int, error) {
 	}
 
 	var jsonOut bool
-	var dir string
+	var header bool // no-op: table header is always printed for backward compatibility
 
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		switch arg {
-		case "-h", "--help":
+	remain, err := lessflags.
+		Bool("--json", &jsonOut).
+		Bool("--header", &header).
+		HelpFunc("-h,--help", func() {
 			fmt.Fprint(stdout, help)
-			return 0, nil
-		case "--header":
-			// no-op: table header is always printed for backward compatibility
-		case "--json":
-			jsonOut = true
-		default:
-			if stringsHasPrefix(arg, "-") {
-				return 2, fmt.Errorf("unknown option: %s", arg)
-			}
-			if dir != "" {
-				return 2, fmt.Errorf("unexpected extra argument: %s", arg)
-			}
-			dir = arg
-		}
+		}).
+		HelpNoExit().
+		Parse(args)
+	if err == lessflags.ErrHelp {
+		return 0, nil
+	}
+	if err != nil {
+		return 2, err
+	}
+	_ = header
+
+	var dir string
+	if len(remain) > 1 {
+		return 2, fmt.Errorf("unexpected extra argument: %s", remain[1])
+	}
+	if len(remain) == 1 {
+		dir = remain[0]
 	}
 
 	if dir == "" {
@@ -540,8 +544,4 @@ func formatHumanSize(size int64) string {
 		}
 	}
 	return fmt.Sprintf("%.1fE", value/1024)
-}
-
-func stringsHasPrefix(s, prefix string) bool {
-	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
 }

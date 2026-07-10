@@ -300,7 +300,7 @@ touches the real user home.
 explain-cli/
 ├── cli/                              # Meta CLI surface (help + routing)
 │   ├── help/                         # explain -h: PATH, --kind, --all-kinds, --json, --color
-│   ├── root-help/                    # root -h lists explain [PATH]
+│   ├── root-help/                    # root -h: subcommands, --dev/--component, nested --help pointer
 │   └── dispatch/                     # run.Run routes explain; no web server
 ├── errors/                           # Invalid inputs
 │   ├── missing-path/                 # no PATH, no --kind, no --all-kinds → non-zero
@@ -378,7 +378,7 @@ explain-cli/
 | Leaf | Mode | Description |
 |------|------|-------------|
 | cli/help | cli | `-h` documents explain usage, PATH, `--kind` (xcode, grok, android-sdk, iterm2, codex), `--all-kinds`, `--json`, `--color`. PATH optional when `--kind` or `--all-kinds`. |
-| cli/root-help | dispatch | Root `-h` lists `explain [PATH]`; no web server. |
+| cli/root-help | dispatch | Root `-h` lists `analyse`/`scan`/`explain`/`tmp-files`, documents `--dev` and `--component`, includes nested-help pointer (`command` + `--help`), no `inspect` subcommand, trailing `\n`; no web server. |
 | cli/dispatch | dispatch | `run.RunWithOptions(["explain", path])` explains without starting web server. |
 | errors/missing-path | cli | No PATH, no `--kind`, no `--all-kinds` → non-zero exit + error. |
 | errors/missing-file | cli | Non-existent PATH → non-zero exit + error. |

@@ -3,20 +3,21 @@
 **Decision**: CLI command mode
 
 ```
-tmp-files -> scan help | scan dispatch
+tmp-files -> parent help (-h/--help) | scan help | scan dispatch
 ```
 
 ## Preconditions
 
 - Command tests exercise argument parsing and top-level dispatch.
+- Parent-level help (`-h` / `--help` with no `scan` token) is a first-class success path.
 
 ## Steps
 
-1. Select either help rendering or run package dispatch.
+1. Select parent help, scan help rendering, or run package dispatch.
 
 ## Context
 
-- Help output is expected to exit cleanly.
+- Help output is expected to exit cleanly (including parent-level `-h` / `--help`).
 - Dispatch must not fall through to web server startup.
 
 ```go

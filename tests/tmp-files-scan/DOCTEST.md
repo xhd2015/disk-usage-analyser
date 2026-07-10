@@ -37,6 +37,9 @@ immediately, flushes after each hit, then prints the summary line
 tmp-files-scan/
 ├── command/
 │   ├── help/                  # scan -h documents flags and exits 0
+│   ├── parent-help/
+│   │   ├── long/              # tmp-files --help (parent level) → usage, exit 0
+│   │   └── short/             # tmp-files -h (parent level) → usage, exit 0
 │   └── cli-dispatch/          # run.Run dispatches tmp-files without web server
 ├── roots/
 │   ├── default-root-tilde/    # no --root scans fixture HOME
@@ -85,6 +88,8 @@ tmp-files-scan/
 | Leaf | Description |
 |------|-------------|
 | command/help | `tmp-files scan -h` documents `--go-binaries`, `--root`, `--max-depth`, and `--json`. |
+| command/parent-help/long | Parent-level `tmp-files --help` (no `scan` token) prints the same usage family as empty/`scan -h`, exit 0, trailing `\n`, no scan. |
+| command/parent-help/short | Parent-level `tmp-files -h` (no `scan` token) prints the same usage family as empty/`scan -h`, exit 0, trailing `\n`, no scan. |
 | command/cli-dispatch | `run.Run` dispatches `tmp-files scan` through the CLI path and never starts the web server. |
 | roots/default-root-tilde | With no `--root`, the scan uses the fixture home directory and renders `~` paths. |
 | roots/custom-root | Explicit `--root` scans only the selected subtree. |

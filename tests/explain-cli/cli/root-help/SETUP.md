@@ -1,6 +1,15 @@
 # Scenario
 
-**Leaf**: root `-h` lists `explain [PATH]` as a subcommand
+**Leaf**: root `-h` lists subcommands, documents server flags, and points to nested help (no server start)
+
+```
+# Root help (no subcommand)
+disk-usage-analyser -h|--help
+  -> lists analyse | scan | explain | tmp-files
+  -> documents --dev and --component
+  -> points users to: disk-usage-analyser <command> --help
+  -> exit 0, StartServer never called
+```
 
 ## Steps
 

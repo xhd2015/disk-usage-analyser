@@ -15,7 +15,7 @@ import (
 	"disk-usage-analyser/usagescan"
 
 	"github.com/xhd2015/kool/pkgs/web"
-	"github.com/xhd2015/less-gen/flags"
+	lessflags "github.com/xhd2015/less-flags"
 )
 
 const help = `
@@ -26,6 +26,12 @@ Subcommands:
   scan [PATH]       Walk a directory and emit a size tree (text or --json); use scan --inspect FILE to query offline
   explain [PATH]    Explain reclaim kind, size breakdown, and safe-to-reclaim advice for a path
   tmp-files scan    Scan temporary file candidates
+
+Server options:
+  --dev             Run the web UI in development mode
+  --component NAME  Serve a single component (use --component list to list)
+
+Run disk-usage-analyser <command> --help for command-specific options.
 `
 
 type Options struct {
@@ -114,7 +120,7 @@ func RunWithOptions(ctx context.Context, args []string, opts Options) error {
 
 	var devFlag bool
 	var component string
-	args, err := flags.
+	args, err := lessflags.
 		Bool("--dev", &devFlag).
 		String("--component", &component).
 		HelpFunc("-h,--help", func() {
@@ -126,7 +132,7 @@ func RunWithOptions(ctx context.Context, args []string, opts Options) error {
 		}).
 		HelpNoExit().
 		Parse(args)
-	if err == flags.ErrHelp {
+	if err == lessflags.ErrHelp {
 		return nil
 	}
 	if err != nil {
