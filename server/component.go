@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ type ServeOptions struct {
 	OpenBrowserUrl func(port int, url string) string
 	Route          func(mux *http.ServeMux) error // Optional custom route registration
 	Dev            bool
+	DevIdleLife    time.Duration
 }
 
 func ServeComponent(port int, opts ServeOptions) error {
@@ -26,13 +28,9 @@ func ServeComponent(port int, opts ServeOptions) error {
 		}
 	}
 
+	rt := buildServeRuntime(port, opts.Dev, opts.DevIdleLife, os.Stderr, nil, 0, false, opts.NoOpenBrowser)
+
 	mux := http.NewServeMux()
-	server := &http.Server{
-		Addr:        fmt.Sprintf(":%d", port),
-		ReadTimeout: 30 * time.Second,
-		// WriteTimeout: 30 * time.Second, // Disable write timeout for SSE
-		Handler: mux,
-	}
 
 	if opts.Dev {
 		err := ProxyDev(mux)
@@ -59,6 +57,8 @@ func ServeComponent(port int, opts ServeOptions) error {
 		}
 	}
 
+	rt.finishHandler(mux)
+
 	url := fmt.Sprintf("http://localhost:%d", port)
 
 	fmt.Printf("Serving at %s\n", url)
@@ -74,7 +74,7 @@ func ServeComponent(port int, opts ServeOptions) error {
 		}()
 	}
 
-	return server.ListenAndServe()
+	return rt.httpServer.ListenAndServe()
 }
 
 // FormatOptions contains the options for formatting the template HTML

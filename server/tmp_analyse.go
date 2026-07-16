@@ -501,6 +501,9 @@ func isSSEClientDisconnect(err error) bool {
 }
 
 func sendSSEEvent(w http.ResponseWriter, event string, data interface{}) error {
+	if activeDevIdleWatch != nil {
+		activeDevIdleWatch.Touch()
+	}
 	jsonData, _ := json.Marshal(data)
 	_, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, jsonData)
 	if err != nil {

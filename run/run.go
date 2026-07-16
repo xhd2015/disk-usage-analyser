@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"disk-usage-analyser/analyse"
 	"disk-usage-analyser/explain"
@@ -34,8 +35,9 @@ Subcommands:
   install …         Alias of skill --install
 
 Server options:
-  --dev             Run the web UI in development mode
-  --component NAME  Serve a single component (use --component list to list)
+  --dev                  Run the web UI in development mode
+  --dev-idle-life DUR    How long the dev server may stay idle before shutdown (default 10m; 0 or off disables)
+  --component NAME       Serve a single component (use --component list to list)
 
 Run disk-usage-analyser <command> --help for command-specific options.
 Run disk-usage-analyser skill --help for skill actions.
@@ -50,9 +52,10 @@ type Options struct {
 }
 
 type ServerOptions struct {
-	Port      int
-	Dev       bool
-	Component string
+	Port        int
+	Dev         bool
+	Component   string
+	DevIdleLife time.Duration
 }
 
 func Run(args []string) error {
@@ -136,8 +139,10 @@ func RunWithOptions(ctx context.Context, args []string, opts Options) error {
 
 	var devFlag bool
 	var component string
+	var devIdleLifeStr string
 	args, err := lessflags.
 		Bool("--dev", &devFlag).
+		String("--dev-idle-life", &devIdleLifeStr).
 		String("--component", &component).
 		HelpFunc("-h,--help", func() {
 			txt := strings.TrimPrefix(help, "\n")
@@ -151,6 +156,11 @@ func RunWithOptions(ctx context.Context, args []string, opts Options) error {
 	if err == lessflags.ErrHelp {
 		return nil
 	}
+	if err != nil {
+		return err
+	}
+
+	devIdleLife, err := parseDevIdleLife(devFlag, devIdleLifeStr)
 	if err != nil {
 		return err
 	}
@@ -181,9 +191,10 @@ func RunWithOptions(ctx context.Context, args []string, opts Options) error {
 
 	if opts.StartServer != nil {
 		return opts.StartServer(ctx, ServerOptions{
-			Port:      port,
-			Dev:       devFlag,
-			Component: component,
+			Port:        port,
+			Dev:         devFlag,
+			Component:   component,
+			DevIdleLife: devIdleLife,
 		})
 	}
 
@@ -198,7 +209,8 @@ func RunWithOptions(ctx context.Context, args []string, opts Options) error {
 			}
 		}
 		return server.ServeComponent(port, server.ServeOptions{
-			Dev: devFlag,
+			Dev:         devFlag,
+			DevIdleLife: devIdleLife,
 			Static: server.StaticOptions{
 				IndexHtml: html,
 			},
@@ -211,5 +223,22 @@ func RunWithOptions(ctx context.Context, args []string, opts Options) error {
 		})
 	}
 
-	return server.Serve(port, devFlag)
+	return server.Serve(port, devFlag, devIdleLife)
+}
+
+func parseDevIdleLife(dev bool, value string) (time.Duration, error) {
+	if !dev {
+		return 0, nil
+	}
+	if value == "" {
+		return 10 * time.Minute, nil
+	}
+	if value == "off" || value == "0" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("invalid --dev-idle-life value %q: %w", value, err)
+	}
+	return d, nil
 }

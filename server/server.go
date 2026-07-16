@@ -18,8 +18,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"github.com/xhd2015/kool/pkgs/web"
 )
 
 var distFS embed.FS
@@ -78,72 +76,64 @@ func EnsureFrontendDevServer(ctx context.Context) (chan struct{}, error) {
 	return nil, fmt.Errorf("frontend server failed to start within timeout")
 }
 
-func Serve(port int, dev bool) error {
-	mux := http.NewServeMux()
-	server := &http.Server{
-		Addr:        fmt.Sprintf(":%d", port),
-		ReadTimeout: 30 * time.Second,
-		// WriteTimeout: 30 * time.Second, // Disable write timeout for SSE
-		Handler: mux,
-	}
+func Serve(port int, dev bool, devIdleLife time.Duration) error {
+	rt := buildServeRuntime(port, dev, devIdleLife, os.Stderr, nil, 0, false, false)
 
+	mux := http.NewServeMux()
 	err := RegisterAPI(mux)
 	if err != nil {
 		return err
 	}
 
+	var subProcessDone chan struct{}
 	if dev {
 		if !checkPort(5173) {
-			// Create context for managing subprocesses
 			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			rt.bunCancel = cancel
 
-			// Handle signals to gracefully shutdown subprocesses
 			go func() {
 				c := make(chan os.Signal, 1)
 				signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 				<-c
-				cancel()
-
-				// wait the dev server to be closed
-				if err := server.Close(); err != nil {
-					fmt.Printf("Failed to close server: %v\n", err)
-				}
+				rt.shutdownDev(false)
 			}()
 
-			subProcessDone, err := EnsureFrontendDevServer(ctx)
+			subProcessDone, err = EnsureFrontendDevServer(ctx)
 			if err != nil {
 				return err
 			}
-			if subProcessDone != nil {
-				defer func() {
-					fmt.Println("Waiting for frontend dev server to be closed...")
-					<-subProcessDone
-				}()
-			}
+		} else {
+			go func() {
+				c := make(chan os.Signal, 1)
+				signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+				<-c
+				rt.shutdownDev(false)
+			}()
 		}
 
-		err := ProxyDev(mux)
+		err = ProxyDev(mux)
 		if err != nil {
 			return err
 		}
 	} else {
-		err := Static(mux, StaticOptions{})
+		err = Static(mux, StaticOptions{})
 		if err != nil {
 			return err
 		}
 	}
 
+	rt.finishHandler(mux)
+
 	fmt.Printf("Serving directory preview at http://localhost:%d\n", port)
 
-	if os.Getenv("NO_BROWSER") != "1" {
-		go func() {
-			time.Sleep(1 * time.Second)
-			web.OpenBrowser(fmt.Sprintf("http://localhost:%d", port))
-		}()
-	}
+	openBrowserUnlessDisabled(port, false)
 
-	return server.ListenAndServe()
+	err = rt.httpServer.ListenAndServe()
+	if subProcessDone != nil {
+		fmt.Println("Waiting for frontend dev server to be closed...")
+		<-subProcessDone
+	}
+	return err
 }
 
 func ProxyDev(mux *http.ServeMux) error {

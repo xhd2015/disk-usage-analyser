@@ -29,6 +29,9 @@ import (
 )
 
 func Setup(t *testing.T, req *Request) error {
+	if req.TeardownOnly {
+		return nil
+	}
 	_, err := exec.LookPath("playwright-debug")
 	if err != nil {
 		return err
