@@ -37,7 +37,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatal("web server must not start for scan dispatch")
 	}
 	assert.Output(t, resp.Stdout, `---
-version: 2
+version: 3
 __PATH__: type=string
 ---
 PATH: __PATH__
@@ -45,8 +45,8 @@ TOTAL: 512 B
 MIN: 1B
 MAX-DEPTH: 3
 
-.
-└── note.txt  512B
+\.
+└── note\.txt  512B
 
 `)
 	if !strings.Contains(resp.Stdout, req.FixtureDir) {

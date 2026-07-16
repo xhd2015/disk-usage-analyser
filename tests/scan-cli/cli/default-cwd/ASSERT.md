@@ -38,7 +38,7 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("expected exit code 0, got %d (err=%v)", resp.ExitCode, resp.Err)
 	}
 	assert.Output(t, resp.Stdout, `---
-version: 2
+version: 3
 __PATH__: type=string
 ---
 PATH: __PATH__
@@ -46,8 +46,8 @@ TOTAL: 2M
 MIN: 1M
 MAX-DEPTH: 3
 
-.
-└── only.txt  2M
+\.
+└── only\.txt  2M
 
 `)
 	if !strings.Contains(resp.Stdout, req.FixtureDir) {

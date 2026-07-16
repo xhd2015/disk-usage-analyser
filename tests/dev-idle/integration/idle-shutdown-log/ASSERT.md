@@ -38,9 +38,9 @@ func Assert(t *testing.T, req *Request, resp *Response, err error) {
 		t.Fatalf("stderr missing shutdown suffix; got:\n%s", resp.Stderr)
 	}
 	assert.Output(t, extractShutdownLine(resp.Stderr), `---
-version: 2
+version: 3
 ---
-[dev] no requests for 1s; shutting down`)
+\[dev\] no requests for 1s; shutting down`)
 }
 
 func extractShutdownLine(stderr string) string {
