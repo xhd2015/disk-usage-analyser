@@ -18,6 +18,10 @@ jobs:
           git config --global user.email "ci@github-actions.local"
           git config --global user.name "github-actions"
           git config --global --add safe.directory '*'
+      - name: Placeholder frontend dist for go:embed
+        run: |
+          mkdir -p disk-usage-analyser-react/dist
+          printf '%s\n' '<!doctype html><title>placeholder</title>' > disk-usage-analyser-react/dist/index.html
       - name: Go test
         run: go test -v ./...
 
