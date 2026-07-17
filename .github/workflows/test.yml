@@ -9,8 +9,15 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: golang:1.25.0
+    env:
+      GOFLAGS: -buildvcs=false
     steps:
       - uses: actions/checkout@v4
+      - name: Configure git identity for tests
+        run: |
+          git config --global user.email "ci@github-actions.local"
+          git config --global user.name "github-actions"
+          git config --global --add safe.directory '*'
       - name: Go test
         run: go test -v ./...
 
