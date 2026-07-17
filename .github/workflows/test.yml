@@ -1,0 +1,34 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.25.0
+    env:
+      GOFLAGS: -buildvcs=false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure git identity for tests
+        run: |
+          git config --global user.email "ci@github-actions.local"
+          git config --global user.name "github-actions"
+          git config --global --add safe.directory '*'
+      - name: Placeholder frontend dist for go:embed
+        run: |
+          mkdir -p disk-usage-analyser-react/dist
+          printf '%s\n' '<!doctype html><title>placeholder</title>' > disk-usage-analyser-react/dist/index.html
+      - name: Go test
+        run: go test -v ./...
+
+      - name: Install doctest
+        run: |
+          if ! command -v doctest >/dev/null 2>&1; then
+            go install github.com/xhd2015/doctest/cmd/doctest@latest
+          fi
+      - name: Doctest
+        run: doctest test -v --label-all ./...
