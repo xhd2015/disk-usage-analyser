@@ -72,6 +72,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/xhd2015/doctest/session"
 )
 
 type Request struct {
@@ -88,55 +90,38 @@ type Response struct {
 	ListenerAliveAfterTeardown   bool
 }
 
-func sessionCacheDir() string {
-	return filepath.Join(os.TempDir(), "frontend-doctest-"+DOCTEST_SESSION_ID)
-}
+// Process-local binary (one-process suite; in-memory mutex, not session flock).
+var (
+	buildDevServerBinaryMu   sync.Mutex
+	buildDevServerBinaryPath string
+	buildDevServerBinaryErr  error
+)
 
-func withFileLock(t *testing.T, lockPath string, fn func() error) error {
+func buildDevServerBinary(t *testing.T, d *session.Doctest) string {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(lockPath), 0755); err != nil {
-		return err
+	buildDevServerBinaryMu.Lock()
+	defer buildDevServerBinaryMu.Unlock()
+	if buildDevServerBinaryPath != "" || buildDevServerBinaryErr != nil {
+		if buildDevServerBinaryErr != nil {
+			t.Fatal(buildDevServerBinaryErr)
+		}
+		return buildDevServerBinaryPath
 	}
-	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0644)
+	dir, err := os.MkdirTemp("", "buildDevServerBinary-")
 	if err != nil {
-		return err
-	}
-	defer f.Close()
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
-		return err
-	}
-	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-	return fn()
-}
-
-func buildDevServerBinary(t *testing.T, projectRoot string) string {
-	t.Helper()
-	cacheDir := sessionCacheDir()
-	bin := filepath.Join(cacheDir, "disk-usage-analyser")
-	lock := filepath.Join(cacheDir, "build.lock")
-	ready := filepath.Join(cacheDir, "binaries.ready")
-
-	err := withFileLock(t, lock, func() error {
-		if _, err := os.Stat(ready); err == nil {
-			if _, err := os.Stat(bin); err == nil {
-				return nil
-			}
-		}
-		if err := os.MkdirAll(cacheDir, 0755); err != nil {
-			return err
-		}
-		cmd := exec.Command("go", "build", "-o", bin, ".")
-		cmd.Dir = projectRoot
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("go build -o %s: %w\n%s", bin, err, string(output))
-		}
-		return os.WriteFile(ready, []byte("ok"), 0644)
-	})
-	if err != nil {
+		buildDevServerBinaryErr = err
 		t.Fatal(err)
 	}
-	return bin
+	binPath := filepath.Join(dir, "disk-usage-analyser")
+	root := filepath.Clean(filepath.Join(d.DOCTEST_ROOT, "..", ".."))
+	cmd := exec.Command("go", "build", "-o", binPath, ".")
+	cmd.Dir = root
+	if out, err := cmd.CombinedOutput(); err != nil {
+		buildDevServerBinaryErr = fmt.Errorf("go build .: %w\n%s", err, strings.TrimSpace(string(out)))
+		t.Fatal(buildDevServerBinaryErr)
+	}
+	buildDevServerBinaryPath = binPath
+	return binPath
 }
 
 func startDevServer(t *testing.T, projectRoot, bin string) (port string, listenerPID int, cleanup func()) {

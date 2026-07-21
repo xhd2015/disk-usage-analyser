@@ -63,6 +63,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/xhd2015/doctest/session"
 )
 
 type Request struct {
@@ -84,62 +86,43 @@ type Response struct {
 	ServerPID     int
 }
 
-func moduleRoot() string {
-	return filepath.Clean(filepath.Join(DOCTEST_ROOT, "..", "..", ".."))
-}
-
-func sessionCacheDir() string {
-	return filepath.Join(os.TempDir(), "dev-idle-subprocess-doctest-"+DOCTEST_SESSION_ID)
-}
-
-func withFileLock(t *testing.T, lockPath string, fn func() error) error {
+func moduleRoot(t *testing.T, d *session.Doctest) string {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(lockPath), 0755); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
-		return err
-	}
-	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-	return fn()
+	return filepath.Clean(filepath.Join(d.DOCTEST_ROOT, "..", "..", ".."))
 }
 
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
+// Process-local binary (one-process suite; in-memory mutex, not session flock).
+var (
+	buildBinaryOnceMu   sync.Mutex
+	buildBinaryOncePath string
+	buildBinaryOnceErr  error
+)
 
-func buildBinaryOnce(t *testing.T) string {
+func buildBinaryOnce(t *testing.T, d *session.Doctest) string {
 	t.Helper()
-	cacheDir := sessionCacheDir()
-	bin := filepath.Join(cacheDir, "disk-usage-analyser")
-	lock := filepath.Join(cacheDir, "build.lock")
-	ready := filepath.Join(cacheDir, "binaries.ready")
-
-	err := withFileLock(t, lock, func() error {
-		if fileExists(ready) && fileExists(bin) {
-			return nil
+	buildBinaryOnceMu.Lock()
+	defer buildBinaryOnceMu.Unlock()
+	if buildBinaryOncePath != "" || buildBinaryOnceErr != nil {
+		if buildBinaryOnceErr != nil {
+			t.Fatal(buildBinaryOnceErr)
 		}
-		if err := os.MkdirAll(cacheDir, 0755); err != nil {
-			return err
-		}
-		cmd := exec.Command("go", "build", "-o", bin, ".")
-		cmd.Dir = moduleRoot()
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("go build -o %s: %w\n%s", bin, err, string(output))
-		}
-		return os.WriteFile(ready, []byte("ok"), 0644)
-	})
+		return buildBinaryOncePath
+	}
+	dir, err := os.MkdirTemp("", "buildBinaryOnce-")
 	if err != nil {
+		buildBinaryOnceErr = err
 		t.Fatal(err)
 	}
-	return bin
+	binPath := filepath.Join(dir, "disk-usage-analyser")
+	root := moduleRoot(t, d)
+	cmd := exec.Command("go", "build", "-o", binPath, ".")
+	cmd.Dir = root
+	if out, err := cmd.CombinedOutput(); err != nil {
+		buildBinaryOnceErr = fmt.Errorf("go build .: %w\n%s", err, strings.TrimSpace(string(out)))
+		t.Fatal(buildBinaryOnceErr)
+	}
+	buildBinaryOncePath = binPath
+	return binPath
 }
 
 func parsePort(line string) (int, bool) {
@@ -207,7 +190,7 @@ func killServerIfRunning(t *testing.T, cmd *exec.Cmd) {
 	_, _ = cmd.Process.Wait()
 }
 
-func startDevServer(t *testing.T, req *Request) (*exec.Cmd, int, *bytes.Buffer, *bytes.Buffer) {
+func startDevServer(t *testing.T, d *session.Doctest, req *Request) (*exec.Cmd, int, *bytes.Buffer, *bytes.Buffer) {
 	t.Helper()
 
 	idleLife := req.DevIdleLife
@@ -223,7 +206,7 @@ func startDevServer(t *testing.T, req *Request) (*exec.Cmd, int, *bytes.Buffer, 
 		"--dev",
 		"--dev-idle-life", idleLife.String(),
 	)
-	cmd.Dir = moduleRoot()
+	cmd.Dir = moduleRoot(t, d)
 	cmd.Env = append(os.Environ(), "NO_BROWSER=1")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
@@ -282,15 +265,15 @@ func startDevServer(t *testing.T, req *Request) (*exec.Cmd, int, *bytes.Buffer, 
 // inside the binary and concurrent starts can race on the same port.
 var subprocessRunMu sync.Mutex
 
-func Run(t *testing.T, req *Request) (*Response, error) {
+func Run(t *testing.T, d *session.Doctest, req *Request) (*Response, error) {
 	subprocessRunMu.Lock()
 	defer subprocessRunMu.Unlock()
 
 	if req.BinPath == "" {
-		req.BinPath = buildBinaryOnce(t)
+		req.BinPath = buildBinaryOnce(t, d)
 	}
 
-	cmd, port, stdoutBuf, stderrBuf := startDevServer(t, req)
+	cmd, port, stdoutBuf, stderrBuf := startDevServer(t, d, req)
 	defer killServerIfRunning(t, cmd)
 
 	pingURL := fmt.Sprintf("http://127.0.0.1:%d/ping", port)
