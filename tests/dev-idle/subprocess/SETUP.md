@@ -20,7 +20,7 @@ time.Sleep past DevIdleLife -> shutdownDev() -> process exit, port closed
 - Depends on P1–P4 (`DevIdleWatch`, `--dev-idle-life` flag, `Serve` wiring, SSE touch).
 - Nested root: `subprocess/DOCTEST.md` owns `Run`; parent `dev-idle/DOCTEST.md` does not run for these leaves.
 - Module root resolved as `filepath.Join(DOCTEST_ROOT, "..", "..", "..")`.
-- Session cache: `$TMPDIR/dev-idle-subprocess-doctest-<DOCTEST_SESSION_ID>/` with file lock;
+- Process-local binary/cache via in-memory mutex (one-process suite; not in-memory mutex) with file lock;
   shared artifact is the compiled **`disk-usage-analyser`** binary (`go build -o`).
 - Subprocess uses **`syscall.SysProcAttr{Setpgid: true}`** so teardown can signal the process group.
 - **`NO_BROWSER=1`** in subprocess env (no browser open).
@@ -40,8 +40,8 @@ time.Sleep past DevIdleLife -> shutdownDev() -> process exit, port closed
 6. Assert port closed, process exited, and stderr log per leaf.
 
 ```go
-func Setup(t *testing.T, req *Request) error {
-	req.BinPath = buildBinaryOnce(t)
+func Setup(t *testing.T, d *session.Doctest, req *Request) error {
+	req.BinPath = buildBinaryOnce(t, d)
 	return nil
 }
 ```
