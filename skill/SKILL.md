@@ -172,3 +172,43 @@ Then a box-drawing tree (name, then aligned size column). When `--top` / `--find
 - Avoid `--max-depth 1` as a first **live** scan if you plan to drill: you will just re-walk everything again. Prefer capture at 6 + inspect.
 - Compare CLI totals with the web app when the user wants visual confirmation.
 - If Android/AVD or image suffixes appear in top consumers, open **android-images** (`skill --show android-images`) before recommending delete.
+
+## Proven-safe cleanup targets
+
+Sizes observed across multiple scans on a developer machine (macOS, home dir ~180–200G).
+Every entry below has been removed at least once with no ill effects.
+
+Reclaim precedence: one-time safe deletes first, then slow-regrowing caches, then fast-regrowing.
+
+| Target | Typical size | Regrows? | How to clean |
+|--------|-------------|----------|--------------|
+| `~/Downloads/*.dmg` | 100–400M | No | `rm -f ~/Downloads/*.dmg` |
+| `~/.xgo/go-instrument/` | 2G | On cross-compile | `rm -rf ~/.xgo/go-instrument/` |
+| `~/.browser-agent/managed-chrome/` | 4G | Agent relaunches Chrome | `rm -rf ~/.browser-agent/managed-chrome/` |
+| `~/.sandbox/gocache/` | 2–3G | On sandbox builds | `rm -rf ~/.sandbox/gocache/` |
+| `~/Library/Caches/go-build/` | 9–15G | On `go build` | `go clean -cache` |
+| `~/Library/Caches/Homebrew/downloads/` | 1.5–2G | On `brew install` | `brew cleanup` |
+| `~/Library/Caches/lifelog-doctest-shareserver/` | 5–7G | On doctest runs | `rm -rf ~/Library/Caches/lifelog-doctest-shareserver/` |
+| `~/Library/Caches/pnpm/` | 500M | On `pnpm install` | `pnpm store prune` |
+| `~/Library/Application Support/SeaTalk/Service Worker/CacheStorage/` | 5–6G | On app use | `rm -rf ~/Library/Application\ Support/SeaTalk/Service\ Worker/CacheStorage/` |
+| `~/.codex/logs_2.sqlite` | 2–5G | Grows daily | `truncate -s 0 ~/.codex/logs_2.sqlite` |
+
+Always query the existing JSON with `scan --inspect` to confirm current sizes before
+cleaning. If a path is not in the scan tree (protected macOS directory, missing,
+already gone), skip it silently.
+
+### Type-specific cache notes
+
+**Browser caches** (Chrome, Opera, Firefox, Brave) — each typically 400M–1.4G in
+`~/Library/Caches/<browser>/`. Safe to clear via browser settings or directly.
+Data like bookmarks and passwords live in `~/Library/Application Support/`, not in
+Caches.
+
+**Node package caches** — `~/.npm/_cacache/` (2–3G) safe via `npm cache clean --force`.
+`~/.npm/_npx/` (1–2G, one-off `npx` installs) safe via `rm -rf ~/.npm/_npx/`.
+
+**Go module cache** — `~/go/pkg/mod/` (6–8G) via `go clean -modcache`. Re-downloads
+on next `go build`.
+
+**iTerm2 Python environments** — `~/Library/Application Support/iTerm2/` often has
+8+ duplicate `iterm2env-*` dirs (~560M each). Delete all but the newest one.
