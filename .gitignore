@@ -9,3 +9,6 @@ bin/
 .idea/
 .vscode/
 /external
+.upload-credentials.json
+/disk-usage-analyser-v*-darwin-*
+/disk-usage-analyser-v*-linux-*

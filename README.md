@@ -2,6 +2,23 @@
 
 A tool similar to the `du` command and macOS storage analyser. It helps users identify large files and eliminate them to save storage space.
 
+# Installation
+
+Installs the **latest** GitHub Release for your OS/arch (no version flag required):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/xhd2015/disk-usage-analyser/master/install.sh | bash
+
+# or from a clone (embeds frontend build)
+go run ./script/install
+```
+
+Then install the skill:
+
+```sh
+disk-usage-analyser skill --install --global    # default: .agents/skills/analyse-my-disk-space/
+```
+
 ## Agent skill
 
 Use this skill in codex/claude code/grok:
